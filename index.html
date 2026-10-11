@@ -36,7 +36,7 @@
   }
   .sidebar-header h2 { font-size: 15px; color: #39ff14; letter-spacing: 1px; }
 
-  /* Tab Buttons Grid (Never overlaps) */
+  /* Non-overlapping Tab Grid */
   .tab-buttons {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -371,7 +371,6 @@
     <h2>FNF MOD STUDIO</h2>
   </div>
 
-  <!-- Clean Grid Tabs -->
   <div class="tab-buttons">
     <button class="tab-btn active" onclick="switchTab('character')">Characters</button>
     <button class="tab-btn" onclick="switchTab('bop')">Cam / Bop</button>
@@ -452,7 +451,7 @@
     <div class="panel-group">
       <h3>Smart Camera Settings</h3>
       <div class="control-row">
-        <label>Smart Singer Tracking:</label>
+        <label>Section Turn Tracking:</label>
         <input type="checkbox" id="cam-smart-toggle" checked onchange="cam.smartTracking = this.checked">
       </div>
       <div class="control-row">
@@ -563,7 +562,7 @@
     <!-- Scene Hierarchy Object Tree -->
     <div class="panel-group">
       <h3>Scene Hierarchy / Object Tree</h3>
-      <p style="font-size:11px; color:#94a3b8; margin-bottom:6px;">Click an object to select it directly (even if hidden behind another):</p>
+      <p style="font-size:11px; color:#94a3b8; margin-bottom:6px;">Select an object directly (even if hidden behind another):</p>
       <div id="object-tree-container"></div>
     </div>
   </div>
@@ -618,7 +617,7 @@
     <canvas id="stageCanvas"></canvas>
     <div id="status-info">Selected: <span id="lbl-selected" style="color:#39ff14">bf</span> | Mode: <span id="lbl-mode" style="color:#38bdf8">move</span></div>
 
-    <!-- V-Slice Mobile Touch Controls Layer (Small, at bottom) -->
+    <!-- V-Slice Mobile Touch Controls Layer -->
     <div id="mobile-touch-layer">
       <div class="touch-hitbox-container">
         <div class="touch-hitbox" data-lane="0">◄</div>
@@ -768,7 +767,6 @@
   </div>
 </div>
 
-<!-- 3 Clean Modular JS Files -->
 <script src="engine.js"></script>
 <script src="studio.js"></script>
 <script src="events.js"></script>
