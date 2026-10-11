@@ -1,443 +1,498 @@
-// --- FNF Studio Engine (Canvas, Drag, 4-Side Resizer & Camera) ---
-const canvas = document.getElementById('stageCanvas');
-const ctx = canvas.getContext('2d');
-const container = document.getElementById('stage-canvas-container');
-
-function resizeCanvas() {
-  canvas.width = container.clientWidth;
-  canvas.height = container.clientHeight;
-}
-window.addEventListener('resize', resizeCanvas);
-
-// Camera System
-const cam = {
-  x: 0,
-  y: 0,
-  targetX: 0,
-  targetY: 0,
-  zoom: 0.9,
-  shakeIntensity: 0,
-  shakeDuration: 0,
-  flashColor: '#ffffff',
-  flashAlpha: 0
-};
-
-// Stage Background & Props
-let stageBg = null;
-const props = []; // Stage props: { id, name, img, x, y, width, height }
-
-// Characters State
-const characters = {
-  dad: { id: 'dad', name: 'Opponent (Lime)', x: -380, y: 80, width: 220, height: 380, flipX: false, color: '#39ff14', currentPose: 'idle', poses: {} },
-  gf:  { id: 'gf',  name: 'Girlfriend',      x: 0,    y: 10, width: 240, height: 320, flipX: false, color: '#a855f7', currentPose: 'idle', poses: {} },
-  bf:  { id: 'bf',  name: 'Boyfriend',       x: 360,  y: 90, width: 200, height: 320, flipX: false, color: '#00ffff', currentPose: 'idle', poses: {} }
-};
-
-let activeTarget = characters.bf; // Currently selected object (char or prop)
-let toolMode = 'move'; // 'move', 'resize', or 'cam'
-
-// Transform & Drag State
-let isInteracting = false;
-let activeHandle = null; // 'body', 'tl', 'tr', 'bl', 'br', 't', 'b', 'l', 'r'
-let dragStartX = 0;
-let dragStartY = 0;
-let initX = 0, initY = 0, initW = 0, initH = 0;
-
-// Coordinate transformation: Screen -> World
-function screenToWorld(sx, sy) {
-  const cx = canvas.width / 2;
-  const cy = canvas.height / 2;
-  return {
-    x: (sx - cx) / cam.zoom + cam.x,
-    y: (sy - cy) / cam.zoom + cam.y
-  };
-}
-
-// Coordinate transformation: World -> Screen
-function worldToScreen(wx, wy) {
-  const cx = canvas.width / 2;
-  const cy = canvas.height / 2;
-  return {
-    x: (wx - cam.x) * cam.zoom + cx,
-    y: (wy - cam.y) * cam.zoom + cy
-  };
-}
-
-// Bounding Box calculations
-function getBounds(obj) {
-  return {
-    left: obj.x - obj.width / 2,
-    right: obj.x + obj.width / 2,
-    top: obj.y - obj.height / 2,
-    bottom: obj.y + obj.height / 2
-  };
-}
-
-// 8 Resizing Handles (4 Corners + 4 Sides)
-function getHandles(obj) {
-  const b = getBounds(obj);
-  return {
-    tl: { x: b.left, y: b.top, cursor: 'nwse-resize' },
-    tr: { x: b.right, y: b.top, cursor: 'nesw-resize' },
-    bl: { x: b.left, y: b.bottom, cursor: 'nesw-resize' },
-    br: { x: b.right, y: b.bottom, cursor: 'nwse-resize' },
-    t:  { x: obj.x, y: b.top, cursor: 'ns-resize' },
-    b:  { x: obj.x, y: b.bottom, cursor: 'ns-resize' },
-    l:  { x: b.left, y: obj.y, cursor: 'ew-resize' },
-    r:  { x: b.right, y: obj.y, cursor: 'ew-resize' }
-  };
-}
-
-// --- Mouse Interaction ---
-canvas.addEventListener('mousedown', (e) => {
-  if (toolMode === 'cam') return;
-
-  const rect = canvas.getBoundingClientRect();
-  const world = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
-
-  // 1. If in Resize Mode, check handle clicks on active target first
-  if (toolMode === 'resize' && activeTarget) {
-    const handles = getHandles(activeTarget);
-    const handleThreshold = 12 / cam.zoom; // 12px screen radius
-
-    for (const [key, pt] of Object.entries(handles)) {
-      if (Math.hypot(world.x - pt.x, world.y - pt.y) <= handleThreshold) {
-        isInteracting = true;
-        activeHandle = key;
-        dragStartX = world.x;
-        dragStartY = world.y;
-        initX = activeTarget.x;
-        initY = activeTarget.y;
-        initW = activeTarget.width;
-        initH = activeTarget.height;
-        return;
-      }
-    }
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FNF Song & Stage Builder Studio</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #090b10;
+    color: #e2e8f0;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
   }
 
-  // 2. Object Selection Hit-Test (Check in order: BF -> Dad -> GF -> Props -> StageBg)
-  const allObjects = [characters.bf, characters.dad, characters.gf, ...props.slice().reverse()];
-  if (stageBg) allObjects.push(stageBg);
-
-  for (const obj of allObjects) {
-    const b = getBounds(obj);
-    if (world.x >= b.left && world.x <= b.right && world.y >= b.top && world.y <= b.bottom) {
-      selectTarget(obj.id);
-      isInteracting = true;
-      activeHandle = 'body';
-      dragStartX = world.x;
-      dragStartY = world.y;
-      initX = obj.x;
-      initY = obj.y;
-      return;
-    }
-  }
-});
-
-window.addEventListener('mousemove', (e) => {
-  const rect = canvas.getBoundingClientRect();
-  const world = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
-
-  // Update Mouse Cursors based on hover
-  if (!isInteracting && toolMode === 'resize' && activeTarget) {
-    const handles = getHandles(activeTarget);
-    let matchedCursor = 'default';
-    for (const pt of Object.values(handles)) {
-      if (Math.hypot(world.x - pt.x, world.y - pt.y) <= 12 / cam.zoom) {
-        matchedCursor = pt.cursor;
-        break;
-      }
-    }
-    canvas.style.cursor = matchedCursor;
-  } else if (!isInteracting) {
-    canvas.style.cursor = toolMode === 'move' ? 'grab' : 'default';
+  /* Left Inspector Sidebar */
+  #sidebar {
+    width: 330px;
+    background: #111420;
+    border-right: 2px solid #1a2336;
+    display: flex;
+    flex-direction: column;
+    z-index: 20;
   }
 
-  if (!isInteracting || !activeTarget) return;
+  .sidebar-header {
+    padding: 14px 16px;
+    background: #151a29;
+    border-bottom: 1px solid #1f283d;
+  }
+  .sidebar-header h2 { font-size: 15px; color: #39ff14; letter-spacing: 1px; }
 
-  const dx = world.x - dragStartX;
-  const dy = world.y - dragStartY;
+  .tab-buttons {
+    display: flex;
+    background: #0d101a;
+    border-bottom: 1px solid #1f283d;
+  }
+  .tab-btn {
+    flex: 1;
+    padding: 10px 4px;
+    background: none;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .tab-btn.active { color: #39ff14; border-bottom: 2px solid #39ff14; background: #151a29; }
 
-  // Move body
-  if (activeHandle === 'body') {
-    canvas.style.cursor = 'grabbing';
-    activeTarget.x = Math.round(initX + dx);
-    activeTarget.y = Math.round(initY + dy);
-    return;
+  .panel-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
   }
 
-  // Handle 4 Sides & Corners Dynamic Resizing
-  let newW = initW;
-  let newH = initH;
-  let newX = initX;
-  let newY = initY;
+  .panel-group {
+    background: #151a29;
+    border: 1px solid #20293d;
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .panel-group h3 { font-size: 12px; color: #cbd5e1; margin-bottom: 8px; text-transform: uppercase; }
 
-  // Right side / Left side
-  if (activeHandle.includes('r')) {
-    newW = Math.max(20, initW + dx);
-    newX = initX + (newW - initW) / 2;
-  } else if (activeHandle.includes('l')) {
-    newW = Math.max(20, initW - dx);
-    newX = initX - (newW - initW) / 2;
+  .control-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 12px;
+  }
+  .control-row label { color: #94a3b8; }
+  .control-row input[type="number"], .control-row select {
+    background: #0d101a;
+    border: 1px solid #26334d;
+    color: #fff;
+    padding: 4px 6px;
+    border-radius: 4px;
+    width: 80px;
+    font-size: 12px;
   }
 
-  // Bottom side / Top side
-  if (activeHandle.includes('b')) {
-    newH = Math.max(20, initH + dy);
-    newY = initY + (newH - initH) / 2;
-  } else if (activeHandle.includes('t')) {
-    newH = Math.max(20, initH - dy);
-    newY = initY - (newH - initH) / 2;
+  .btn {
+    padding: 7px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+  .btn-green { background: #39ff14; color: #000; }
+  .btn-green:hover { background: #51ff33; box-shadow: 0 0 12px rgba(57, 255, 20, 0.4); }
+  .btn-gray { background: #1c2336; color: #cbd5e1; }
+  .btn-gray:hover { background: #26314c; }
+  .btn-active { background: #0284c7; color: #fff; }
+  .btn-red { background: #ef4444; color: #fff; }
+
+  .file-input-btn {
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding: 7px;
+    background: #1c2336;
+    border: 1px dashed #344263;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    color: #38bdf8;
+    margin-top: 6px;
+  }
+  .file-input-btn:hover { background: #242e47; border-color: #38bdf8; }
+  .file-input-btn input { display: none; }
+
+  /* Viewport */
+  #viewport-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background: #06070b;
   }
 
-  activeTarget.width = Math.round(newW);
-  activeTarget.height = Math.round(newH);
-  activeTarget.x = Math.round(newX);
-  activeTarget.y = Math.round(newY);
-});
-
-window.addEventListener('mouseup', () => {
-  isInteracting = false;
-  activeHandle = null;
-  canvas.style.cursor = 'default';
-});
-
-// --- Studio Selection & Modes ---
-function setToolMode(mode) {
-  toolMode = mode;
-  document.getElementById('lbl-mode').textContent = mode;
-  ['move', 'resize', 'cam'].forEach(m => {
-    const btn = document.getElementById(`btn-mode-${m}`);
-    btn.className = (m === mode) ? 'btn btn-active' : 'btn btn-gray';
-  });
-}
-
-function selectTarget(id) {
-  if (characters[id]) {
-    activeTarget = characters[id];
-    document.getElementById('char-select').value = id;
-    document.getElementById('char-flip').checked = activeTarget.flipX;
-  } else {
-    const prop = props.find(p => p.id === id);
-    if (prop) activeTarget = prop;
-    else if (stageBg && stageBg.id === id) activeTarget = stageBg;
+  #top-bar {
+    height: 48px;
+    background: #111420;
+    border-bottom: 1px solid #1a2336;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
   }
-  document.getElementById('lbl-selected').textContent = activeTarget ? activeTarget.name : 'none';
-}
+  .top-btn-group { display: flex; gap: 8px; align-items: center; }
 
-function updateSelectedTransform() {
-  if (activeTarget && activeTarget.flipX !== undefined) {
-    activeTarget.flipX = document.getElementById('char-flip').checked;
+  #stage-canvas-container {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
   }
-}
+  canvas { display: block; width: 100%; height: 100%; }
 
-function switchTab(tab) {
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.panel-content').forEach(p => p.style.display = 'none');
-  document.getElementById(`tab-${tab}`).style.display = 'flex';
-  event.target.classList.add('active');
-}
-
-// --- Asset Loaders ---
-function loadPose(pose, evt) {
-  const file = evt.target.files[0];
-  if (!file || !activeTarget || !activeTarget.poses) return;
-  const img = new Image();
-  img.src = URL.createObjectURL(file);
-  img.onload = () => {
-    activeTarget.poses[pose] = img;
-    activeTarget.currentPose = pose;
-  };
-}
-
-function triggerPose(pose) {
-  if (activeTarget && activeTarget.poses) activeTarget.currentPose = pose;
-}
-
-function loadBackground(evt) {
-  const file = evt.target.files[0];
-  if (!file) return;
-  const img = new Image();
-  img.src = URL.createObjectURL(file);
-  img.onload = () => {
-    stageBg = { id: 'bg', name: 'Background', img: img, x: 0, y: 0, width: img.width, height: img.height };
-    refreshPropsList();
-  };
-}
-
-function addProp(evt) {
-  const file = evt.target.files[0];
-  if (!file) return;
-  const img = new Image();
-  img.src = URL.createObjectURL(file);
-  img.onload = () => {
-    const p = {
-      id: 'prop_' + Date.now(),
-      name: file.name.split('.')[0] || 'Prop',
-      img: img,
-      x: 0,
-      y: 0,
-      width: img.width || 200,
-      height: img.height || 200
-    };
-    props.push(p);
-    selectTarget(p.id);
-    refreshPropsList();
-  };
-}
-
-function refreshPropsList() {
-  const list = document.getElementById('props-list');
-  list.innerHTML = '';
-  if (stageBg) {
-    list.innerHTML += `<div style="padding:4px; cursor:pointer;" onclick="selectTarget('bg')">🖼️ Main Background</div>`;
-  }
-  props.forEach(p => {
-    list.innerHTML += `<div style="padding:4px; cursor:pointer;" onclick="selectTarget('${p.id}')">📦 ${p.name}</div>`;
-  });
-}
-
-// --- Visual FX ---
-function triggerFlash(col, a) { cam.flashColor = col; cam.flashAlpha = a; }
-function triggerShake(amt, d) { cam.shakeIntensity = amt; cam.shakeDuration = d; }
-
-// --- Render Loop ---
-let lastTime = performance.now();
-
-function render() {
-  const now = performance.now();
-  const dt = (now - lastTime) / 1000;
-  lastTime = now;
-
-  // Camera tracking
-  if (toolMode === 'cam') {
-    cam.targetX = activeTarget.x;
-    cam.targetY = activeTarget.y - 40;
-  } else {
-    cam.targetX = 0;
-    cam.targetY = 0;
-  }
-  cam.x += (cam.targetX - cam.x) * 0.1;
-  cam.y += (cam.targetY - cam.y) * 0.1;
-
-  // Shake
-  let shakeX = 0, shakeY = 0;
-  if (cam.shakeDuration > 0) {
-    cam.shakeDuration -= dt;
-    shakeX = (Math.random() - 0.5) * cam.shakeIntensity * 2;
-    shakeY = (Math.random() - 0.5) * cam.shakeIntensity * 2;
+  #status-info {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    font-family: monospace;
+    font-size: 12px;
+    background: rgba(10, 13, 22, 0.85);
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid #20293d;
+    pointer-events: none;
   }
 
-  ctx.fillStyle = '#06070a';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  ctx.save();
-  ctx.translate(canvas.width / 2 + shakeX, canvas.height / 2 + shakeY);
-  ctx.scale(cam.zoom, cam.zoom);
-  ctx.translate(-cam.x, -cam.y);
-
-  // 1. Draw Main Background
-  if (stageBg && stageBg.img) {
-    ctx.drawImage(stageBg.img, stageBg.x - stageBg.width / 2, stageBg.y - stageBg.height / 2, stageBg.width, stageBg.height);
-  } else {
-    // Grid floor
-    ctx.strokeStyle = '#161e2e';
-    ctx.lineWidth = 2;
-    for (let x = -1000; x <= 1000; x += 100) {
-      ctx.beginPath(); ctx.moveTo(x, 260); ctx.lineTo(x, 1000); ctx.stroke();
-    }
-    ctx.beginPath(); ctx.moveTo(-1200, 260); ctx.lineTo(1200, 260); ctx.stroke();
+  /* --- Frame Animation Studio Modal --- */
+  #frame-studio-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(7, 9, 15, 0.94);
+    z-index: 1000;
+    flex-direction: column;
+    padding: 24px;
+    backdrop-filter: blur(4px);
   }
 
-  // 2. Draw Props
-  props.forEach(p => {
-    ctx.drawImage(p.img, p.x - p.width / 2, p.y - p.height / 2, p.width, p.height);
-  });
-
-  // 3. Draw Characters (GF -> Dad -> BF)
-  ['gf', 'dad', 'bf'].forEach(id => {
-    const c = characters[id];
-    const img = c.poses[c.currentPose] || c.poses['idle'];
-
-    ctx.save();
-    ctx.translate(c.x, c.y);
-    if (c.flipX) ctx.scale(-1, 1);
-
-    if (img) {
-      ctx.drawImage(img, -c.width / 2, -c.height / 2, c.width, c.height);
-    } else {
-      ctx.fillStyle = c.color + '33';
-      ctx.strokeStyle = c.color;
-      ctx.lineWidth = 2;
-      ctx.fillRect(-c.width / 2, -c.height / 2, c.width, c.height);
-      ctx.strokeRect(-c.width / 2, -c.height / 2, c.width, c.height);
-
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 15px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText(c.name, 0, 0);
-    }
-    ctx.restore();
-  });
-
-  // 4. Draw Selection Bounding Box & 4-Side Handles
-  if (activeTarget && toolMode !== 'cam') {
-    const b = getBounds(activeTarget);
-
-    ctx.strokeStyle = '#38bdf8';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 4]);
-    ctx.strokeRect(b.left, b.top, activeTarget.width, activeTarget.height);
-    ctx.setLineDash([]);
-
-    // Draw handles if in Resize Mode
-    if (toolMode === 'resize') {
-      const handles = getHandles(activeTarget);
-      const hSize = 8 / cam.zoom;
-
-      ctx.fillStyle = '#ffffff';
-      ctx.strokeStyle = '#0284c7';
-      ctx.lineWidth = 2;
-
-      for (const pt of Object.values(handles)) {
-        ctx.fillRect(pt.x - hSize / 2, pt.y - hSize / 2, hSize, hSize);
-        ctx.strokeRect(pt.x - hSize / 2, pt.y - hSize / 2, hSize, hSize);
-      }
-    }
+  .studio-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid #232d42;
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+  }
+  .studio-modal-header h2 {
+    font-size: 20px;
+    font-style: italic;
+    color: #39ff14;
+    text-transform: uppercase;
   }
 
-  ctx.restore();
-
-  // Screen Flash
-  if (cam.flashAlpha > 0) {
-    ctx.fillStyle = cam.flashColor;
-    ctx.globalAlpha = cam.flashAlpha;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.globalAlpha = 1.0;
-    cam.flashAlpha = Math.max(0, cam.flashAlpha - dt * 1.5);
+  /* Animation Frame Grid (Matching Mockup) */
+  .grid-container {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding-right: 8px;
   }
 
-  requestAnimationFrame(render);
-}
+  .pose-row {
+    background: #111522;
+    border: 3px solid #000;
+    border-radius: 6px;
+    display: flex;
+    align-items: stretch;
+    min-height: 120px;
+    overflow-x: auto;
+  }
 
-// Project Exporter
-function exportProject() {
-  const project = {
-    characters: {
-      dad: { x: characters.dad.x, y: characters.dad.y, w: characters.dad.width, h: characters.dad.height, flipX: characters.dad.flipX },
-      bf:  { x: characters.bf.x,  y: characters.bf.y,  w: characters.bf.width,  h: characters.bf.height,  flipX: characters.bf.flipX },
-      gf:  { x: characters.gf.x,  y: characters.gf.y,  w: characters.gf.width,  h: characters.gf.height,  flipX: characters.gf.flipX }
-    },
-    props: props.map(p => ({ name: p.name, x: p.x, y: p.y, w: p.width, h: p.height }))
-  };
+  .pose-label-cell {
+    width: 140px;
+    min-width: 140px;
+    background: #181f33;
+    border-right: 3px solid #000;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .pose-label-cell h4 {
+    font-size: 18px;
+    font-style: italic;
+    color: #cbd5e1;
+  }
 
-  const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'stage_layout.json';
-  a.click();
-}
+  .frames-strip {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    flex: 1;
+  }
 
-resizeCanvas();
-setToolMode('move');
-requestAnimationFrame(render);
+  .frame-cell {
+    width: 95px;
+    height: 95px;
+    min-width: 95px;
+    background: #1b2136;
+    border: 3px solid #000;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    cursor: pointer;
+    transition: 0.15s;
+  }
+  .frame-cell:hover {
+    border-color: #39ff14;
+    transform: translateY(-2px);
+  }
+  .frame-cell.selected {
+    border-color: #38bdf8;
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+  }
+
+  .frame-cell img {
+    max-width: 80%;
+    max-height: 70%;
+    object-fit: contain;
+  }
+  .frame-cell span {
+    position: absolute;
+    bottom: 2px;
+    font-size: 10px;
+    font-family: monospace;
+    color: #94a3b8;
+  }
+
+  .add-frame-cell {
+    width: 95px;
+    height: 95px;
+    min-width: 95px;
+    background: #131726;
+    border: 3px dashed #303d5c;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+    color: #38bdf8;
+    cursor: pointer;
+    text-align: center;
+    padding: 8px;
+  }
+  .add-frame-cell:hover {
+    background: #192036;
+    border-color: #38bdf8;
+  }
+
+  /* Sub-inspector for selected frame */
+  #frame-inspector {
+    display: none;
+    background: #141926;
+    border: 2px solid #2c3852;
+    border-radius: 8px;
+    padding: 12px 18px;
+    margin-top: 12px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  /* Spritesheet Slicer Popup */
+  #slicer-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 1100;
+    align-items: center;
+    justify-content: center;
+  }
+  .slicer-card {
+    background: #131826;
+    border: 2px solid #39ff14;
+    border-radius: 10px;
+    padding: 20px;
+    width: 440px;
+    max-width: 90vw;
+  }
+</style>
+</head>
+<body>
+
+<!-- Left Inspector Sidebar -->
+<aside id="sidebar">
+  <div class="sidebar-header">
+    <h2>FNF MOD STUDIO</h2>
+  </div>
+
+  <div class="tab-buttons">
+    <button class="tab-btn active" onclick="switchTab('character')">Characters</button>
+    <button class="tab-btn" onclick="switchTab('stage')">Props / Stage</button>
+    <button class="tab-btn" onclick="switchTab('events')">Events</button>
+  </div>
+
+  <!-- Character Panel -->
+  <div class="panel-content" id="tab-character">
+    <div class="panel-group">
+      <h3>Active Target</h3>
+      <div class="control-row">
+        <label>Selected:</label>
+        <select id="char-select" onchange="selectTarget(this.value)">
+          <option value="bf">Boyfriend</option>
+          <option value="dad">Opponent (Lime)</option>
+          <option value="gf">Girlfriend</option>
+        </select>
+      </div>
+      <div class="control-row">
+        <label>Flip X (Mirror):</label>
+        <input type="checkbox" id="char-flip" onchange="updateSelectedTransform()">
+      </div>
+    </div>
+
+    <!-- Frame Studio Launcher -->
+    <div class="panel-group">
+      <h3>Animation Frames</h3>
+      <p style="font-size:11px; color:#94a3b8; margin-bottom:8px;">Add multi-frame poses or slice a sprite sheet.</p>
+      <button class="btn btn-green" style="width:100%; padding:10px;" onclick="openFrameStudio()">
+        🎬 Open Frame Grid Editor
+      </button>
+    </div>
+
+    <div class="panel-group">
+      <h3>Test Poses</h3>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;">
+        <button class="btn btn-gray" onclick="triggerPose('idle')">Idle</button>
+        <button class="btn btn-gray" onclick="triggerPose('singLEFT')">Left</button>
+        <button class="btn btn-gray" onclick="triggerPose('singDOWN')">Down</button>
+        <button class="btn btn-gray" onclick="triggerPose('singUP')">Up</button>
+        <button class="btn btn-gray" onclick="triggerPose('singRIGHT')">Right</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stage Panel -->
+  <div class="panel-content" id="tab-stage" style="display:none;">
+    <div class="panel-group">
+      <h3>Background & Props</h3>
+      <label class="file-input-btn">Upload Main Background
+        <input type="file" accept="image/*" onchange="loadBackground(event)">
+      </label>
+      <label class="file-input-btn">+ Add Custom Stage Prop
+        <input type="file" accept="image/*" onchange="addProp(event)">
+      </label>
+    </div>
+    <div class="panel-group">
+      <h3>Layers & Objects</h3>
+      <div id="props-list" style="font-size:12px; display:flex; flex-direction:column; gap:4px;"></div>
+    </div>
+  </div>
+
+  <!-- Events Panel -->
+  <div class="panel-content" id="tab-events" style="display:none;">
+    <div class="panel-group">
+      <h3>Screen Effects</h3>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <button class="btn btn-red" onclick="triggerFlash('#ff1744', 0.6)">🚨 Reactor Red Flash</button>
+        <button class="btn btn-gray" onclick="triggerFlash('#ffffff', 0.8)">⚡ White Flash</button>
+        <button class="btn btn-gray" onclick="triggerShake(16, 0.4)">📳 Screen Shake</button>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- Viewport -->
+<main id="viewport-area">
+  <div id="top-bar">
+    <div class="top-btn-group">
+      <span style="font-size:12px; color:#94a3b8;">Tools:</span>
+      <button class="btn btn-active" id="btn-mode-move" onclick="setToolMode('move')">Move Mode</button>
+      <button class="btn btn-gray" id="btn-mode-resize" onclick="setToolMode('resize')">⤢ Resizer Mode (4 Sides)</button>
+      <button class="btn btn-gray" id="btn-mode-cam" onclick="setToolMode('cam')">Camera Test</button>
+    </div>
+    <div class="top-btn-group">
+      <button class="btn btn-green" onclick="exportProject()">Export Project</button>
+    </div>
+  </div>
+
+  <div id="stage-canvas-container">
+    <canvas id="stageCanvas"></canvas>
+    <div id="status-info">Selected: <span id="lbl-selected" style="color:#39ff14">bf</span> | Mode: <span id="lbl-mode" style="color:#38bdf8">move</span></div>
+  </div>
+</main>
+
+<!-- FRAME ANIMATION STUDIO MODAL (Mockup Implementation) -->
+<div id="frame-studio-modal">
+  <div class="studio-modal-header">
+    <h2 id="studio-character-title">Editing Character</h2>
+    <div style="display:flex; gap:10px; align-items:center;">
+      <label style="font-size:13px; color:#94a3b8;">Playback FPS:
+        <input type="number" id="studio-fps-input" value="12" min="1" max="60" style="width:55px; background:#0d101a; border:1px solid #303d5c; color:#fff; border-radius:4px; padding:3px;" onchange="updateFPS(this.value)">
+      </label>
+      <button class="btn btn-gray" onclick="openSlicerModal()">📐 Import Sprite Sheet (Grid)</button>
+      <button class="btn btn-green" onclick="closeFrameStudio()">Done / Back to Stage</button>
+    </div>
+  </div>
+
+  <!-- Rows Grid -->
+  <div class="grid-container" id="poses-grid-container">
+    <!-- Rows dynamically generated: IDLE, UP, DOWN, LEFT, RIGHT -->
+  </div>
+
+  <!-- Frame Inspector (Edit/Replace/Resize Selected Frame) -->
+  <div id="frame-inspector">
+    <div style="font-size:13px; font-weight:600; color:#38bdf8;">
+      Selected: <span id="lbl-insp-pose">IDLE</span> - Frame <span id="lbl-insp-idx">1</span>
+    </div>
+    <div style="display:flex; gap:12px; align-items:center; font-size:12px;">
+      <label>Width: <input type="number" id="insp-frame-w" style="width:65px;" onchange="updateFrameDimensions()"></label>
+      <label>Height: <input type="number" id="insp-frame-h" style="width:65px;" onchange="updateFrameDimensions()"></label>
+      <label>Offset X: <input type="number" id="insp-frame-ox" style="width:55px;" onchange="updateFrameDimensions()"></label>
+      <label>Offset Y: <input type="number" id="insp-frame-oy" style="width:55px;" onchange="updateFrameDimensions()"></label>
+      <label class="btn btn-gray" style="cursor:pointer;">
+        Replace Image <input type="file" accept="image/*" style="display:none;" onchange="replaceSelectedFrame(event)">
+      </label>
+      <button class="btn btn-red" onclick="deleteSelectedFrame()">Delete Frame</button>
+    </div>
+  </div>
+</div>
+
+<!-- SPRITESHEET SLICER POPUP -->
+<div id="slicer-modal">
+  <div class="slicer-card">
+    <h3 style="margin-bottom:12px; color:#39ff14;">Upload & Slice Sprite Sheet</h3>
+    <p style="font-size:12px; color:#94a3b8; margin-bottom:14px;">Select an image and specify the grid dimensions to extract frames automatically.</p>
+    
+    <label class="file-input-btn" style="margin-bottom:14px;">
+      Select Sprite Sheet (.png)
+      <input type="file" id="slicer-file-input" accept="image/*" onchange="previewSlicerImage(event)">
+    </label>
+
+    <div style="display:flex; gap:12px; margin-bottom:14px; font-size:13px;">
+      <label style="flex:1;">Rows: <input type="number" id="slicer-rows" value="2" min="1" max="20" style="width:100%; margin-top:4px; padding:6px; background:#0d101a; border:1px solid #28334a; color:#fff; border-radius:4px;"></label>
+      <label style="flex:1;">Columns: <input type="number" id="slicer-cols" value="4" min="1" max="20" style="width:100%; margin-top:4px; padding:6px; background:#0d101a; border:1px solid #28334a; color:#fff; border-radius:4px;"></label>
+    </div>
+
+    <div style="margin-bottom:16px; font-size:13px;">
+      <label>Target Pose:
+        <select id="slicer-target-pose" style="width:100%; margin-top:4px; padding:6px; background:#0d101a; border:1px solid #28334a; color:#39ff14; border-radius:4px;">
+          <option value="idle">IDLE</option>
+          <option value="singUP">UP</option>
+          <option value="singDOWN">DOWN</option>
+          <option value="singLEFT">LEFT</option>
+          <option value="singRIGHT">RIGHT</option>
+        </select>
+      </label>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; gap:8px;">
+      <button class="btn btn-gray" onclick="closeSlicerModal()">Cancel</button>
+      <button class="btn btn-green" onclick="processSlices()">Slice & Add Frames</button>
+    </div>
+  </div>
+</div>
+
+<script src="studio.js"></script>
+</body>
+</html>
