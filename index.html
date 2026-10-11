@@ -9,9 +9,10 @@
   body {
     background: #090b10;
     color: #e2e8f0;
-    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
     display: flex;
     height: 100vh;
+    width: 100vw;
     overflow: hidden;
     user-select: none;
   }
@@ -19,11 +20,13 @@
   /* Left Inspector Sidebar */
   #sidebar {
     width: 340px;
+    min-width: 340px;
     background: #111420;
     border-right: 2px solid #1a2336;
     display: flex;
     flex-direction: column;
     z-index: 20;
+    height: 100%;
   }
 
   .sidebar-header {
@@ -33,22 +36,32 @@
   }
   .sidebar-header h2 { font-size: 15px; color: #39ff14; letter-spacing: 1px; }
 
+  /* Tab Buttons Grid (Never overlaps) */
   .tab-buttons {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    padding: 6px;
     background: #0d101a;
     border-bottom: 1px solid #1f283d;
   }
   .tab-btn {
-    flex: 1;
-    padding: 10px 4px;
-    background: none;
-    border: none;
+    padding: 8px 4px;
+    background: #151a29;
+    border: 1px solid #20293d;
+    border-radius: 4px;
     color: #94a3b8;
     cursor: pointer;
     font-size: 11px;
     font-weight: 600;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: 0.15s;
   }
-  .tab-btn.active { color: #39ff14; border-bottom: 2px solid #39ff14; background: #151a29; }
+  .tab-btn:hover { background: #1c2438; color: #fff; }
+  .tab-btn.active { color: #39ff14; border-color: #39ff14; background: #1c2438; }
 
   .panel-content {
     flex: 1;
@@ -117,6 +130,23 @@
   .file-input-btn:hover { background: #242e47; border-color: #38bdf8; }
   .file-input-btn input { display: none; }
 
+  /* Scene Hierarchy / Object Tree */
+  .object-tree-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    background: #0d101a;
+    border: 1px solid #1f2738;
+    border-radius: 5px;
+    font-size: 12px;
+    cursor: pointer;
+    margin-bottom: 4px;
+    transition: 0.15s;
+  }
+  .object-tree-item:hover { border-color: #38bdf8; background: #161c2c; }
+  .object-tree-item.selected { border-color: #39ff14; background: #182436; color: #39ff14; font-weight: bold; }
+
   /* Viewport Area */
   #viewport-area {
     flex: 1;
@@ -124,10 +154,13 @@
     flex-direction: column;
     position: relative;
     background: #06070b;
+    height: 100%;
+    overflow: hidden;
   }
 
   #top-bar {
     height: 48px;
+    min-height: 48px;
     background: #111420;
     border-bottom: 1px solid #1a2336;
     display: flex;
@@ -138,9 +171,9 @@
   }
   .top-btn-group { display: flex; gap: 8px; align-items: center; }
 
-  /* Phase Tabs Bar */
   #phase-bar {
     height: 38px;
+    min-height: 38px;
     background: #0d101a;
     border-bottom: 1px solid #1a2336;
     display: flex;
@@ -169,10 +202,19 @@
 
   #stage-canvas-container {
     flex: 1;
+    width: 100%;
+    height: 100%;
     position: relative;
     overflow: hidden;
+    min-height: 250px;
   }
-  canvas { display: block; width: 100%; height: 100%; }
+  canvas {
+    display: block;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
 
   #status-info {
     position: absolute;
@@ -188,9 +230,9 @@
     z-index: 15;
   }
 
-  /* Bottom Timeline Bar */
   #timeline-bar {
-    height: 110px;
+    height: 115px;
+    min-height: 115px;
     background: #111420;
     border-top: 2px solid #1a2336;
     display: flex;
@@ -202,7 +244,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
     font-size: 12px;
   }
   .timeline-track {
@@ -216,7 +258,7 @@
   }
   .timeline-playhead {
     position: absolute;
-    top: 0; bottom: 0; width: 2px;
+    top: 0; bottom: 0; width: 3px;
     background: #38bdf8; pointer-events: none;
   }
   .timeline-startpos {
@@ -226,60 +268,51 @@
   }
   .timeline-event-marker {
     position: absolute;
-    top: 0; bottom: 0; width: 4px;
-    background: #ff1744; box-shadow: 0 0 6px #ff1744; pointer-events: none;
+    top: 0; bottom: 0; width: 6px;
+    background: #ff1744; box-shadow: 0 0 8px #ff1744;
+    cursor: ew-resize;
+    z-index: 5;
   }
 
   /* V-Slice Mobile Touch Controls Layer */
   #mobile-touch-layer {
     display: none;
     position: absolute;
-    bottom: 115px;
-    left: 0;
-    right: 0;
-    height: 150px;
+    bottom: 120px;
+    left: 0; right: 0;
+    height: 70px;
     z-index: 25;
     pointer-events: auto;
-    padding: 10px 20px;
+    padding: 4px 16px;
   }
   .touch-hitbox-container {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    gap: 12px;
-    justify-content: center;
-    align-items: center;
+    width: 100%; height: 100%;
+    display: flex; gap: 8px;
+    justify-content: center; align-items: center;
   }
   .touch-hitbox {
-    flex: 1;
-    max-width: 140px;
-    height: 100%;
-    border-radius: 12px;
-    background: rgba(18, 24, 38, 0.45);
-    border: 3px solid rgba(255, 255, 255, 0.2);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 32px;
-    color: #fff;
-    transition: 0.1s;
-    user-select: none;
+    flex: 1; max-width: 90px; height: 100%;
+    border-radius: 10px;
+    background: rgba(18, 24, 38, 0.65);
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px; color: #fff;
+    transition: 0.08s; user-select: none;
   }
-  .touch-hitbox[data-lane="0"] { border-color: rgba(194, 75, 153, 0.6); }
-  .touch-hitbox[data-lane="1"] { border-color: rgba(0, 255, 255, 0.6); }
-  .touch-hitbox[data-lane="2"] { border-color: rgba(18, 250, 5, 0.6); }
-  .touch-hitbox[data-lane="3"] { border-color: rgba(249, 57, 63, 0.6); }
-
+  .touch-hitbox[data-lane="0"] { border-color: rgba(194, 75, 153, 0.8); }
+  .touch-hitbox[data-lane="1"] { border-color: rgba(0, 255, 255, 0.8); }
+  .touch-hitbox[data-lane="2"] { border-color: rgba(18, 250, 5, 0.8); }
+  .touch-hitbox[data-lane="3"] { border-color: rgba(249, 57, 63, 0.8); }
   .touch-hitbox.pressed {
-    transform: scale(0.95);
-    background: rgba(255, 255, 255, 0.35);
-    box-shadow: 0 0 20px rgba(255, 255, 255, 0.8);
+    transform: scale(0.92);
+    background: rgba(255, 255, 255, 0.4);
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
   }
 
-  /* Frame Studio & Modals */
+  /* Modals */
   #frame-studio-modal {
     display: none; position: fixed; inset: 0;
-    background: rgba(7, 9, 15, 0.94); z-index: 1000;
+    background: rgba(7, 9, 15, 0.95); z-index: 1000;
     flex-direction: column; padding: 24px; backdrop-filter: blur(4px);
   }
   .studio-modal-header {
@@ -315,6 +348,7 @@
     font-size: 12px; font-weight: bold; color: #38bdf8; cursor: pointer; text-align: center; padding: 8px;
   }
   .add-frame-cell:hover { background: #192036; border-color: #38bdf8; }
+
   #frame-inspector {
     display: none; background: #141926; border: 2px solid #2c3852; border-radius: 8px;
     padding: 12px 18px; margin-top: 12px; align-items: center; justify-content: space-between; gap: 16px;
@@ -332,18 +366,18 @@
 </head>
 <body>
 
-<!-- Left Inspector Sidebar -->
 <aside id="sidebar">
   <div class="sidebar-header">
     <h2>FNF MOD STUDIO</h2>
   </div>
 
+  <!-- Clean Grid Tabs -->
   <div class="tab-buttons">
     <button class="tab-btn active" onclick="switchTab('character')">Characters</button>
-    <button class="tab-btn" onclick="switchTab('bop')">Camera & Bop</button>
+    <button class="tab-btn" onclick="switchTab('bop')">Cam / Bop</button>
     <button class="tab-btn" onclick="switchTab('audio')">Audio / Chart</button>
-    <button class="tab-btn" onclick="switchTab('mobile')">Mobile & Controls</button>
-    <button class="tab-btn" onclick="switchTab('stage')">Props</button>
+    <button class="tab-btn" onclick="switchTab('mobile')">Controls</button>
+    <button class="tab-btn" onclick="switchTab('stage')">Props / Tree</button>
     <button class="tab-btn" onclick="switchTab('events')">Events</button>
   </div>
 
@@ -365,29 +399,27 @@
       </div>
     </div>
 
-    <!-- Idle Dance & Bounce Settings -->
     <div class="panel-group">
       <h3>Idle Dance & Bounce Timing</h3>
       <div class="control-row">
         <label>Dance Every:</label>
         <select id="char-dance-freq" onchange="updateDanceFreq(this.value)">
-          <option value="1">1 Beat (Fast / Hectic)</option>
-          <option value="2" selected>2 Beats (Classic Standard)</option>
-          <option value="4">4 Beats (Slow / Relaxed)</option>
+          <option value="1">1 Beat (Fast)</option>
+          <option value="2" selected>2 Beats (Standard)</option>
+          <option value="4">4 Beats (Slow)</option>
         </select>
       </div>
       <div class="control-row">
-        <label>Bounce Squish Power:</label>
+        <label>Squish Power:</label>
         <input type="range" id="char-bounce-pow" min="0" max="0.15" step="0.01" value="0.06" oninput="updateBouncePow(this.value)">
       </div>
     </div>
 
-    <!-- Phase Winning/Losing Icons -->
     <div class="panel-group">
       <h3>Phase Icons (Neutral & Losing)</h3>
       <p style="font-size:11px; color:#94a3b8; margin-bottom:6px;">Upload icons for <b id="lbl-icon-phase" style="color:#39ff14">Phase 1</b>:</p>
       <label class="file-input-btn">
-        Upload Neutral / Winning Icon (PNG)
+        Upload Neutral Icon (PNG)
         <input type="file" accept="image/*" onchange="loadCharacterIcon('neutral', event)">
       </label>
       <label class="file-input-btn">
@@ -420,27 +452,27 @@
     <div class="panel-group">
       <h3>Smart Camera Settings</h3>
       <div class="control-row">
-        <label>Smart Camera Tracking:</label>
+        <label>Smart Singer Tracking:</label>
         <input type="checkbox" id="cam-smart-toggle" checked onchange="cam.smartTracking = this.checked">
       </div>
       <div class="control-row">
         <label>Default Base Zoom:</label>
-        <input type="number" id="cam-base-zoom" step="0.05" value="0.9" oninput="cam.targetZoom = parseFloat(this.value)">
+        <input type="number" id="cam-base-zoom" step="0.05" value="0.85" oninput="cam.targetZoom = parseFloat(this.value); cam.baseZoom = parseFloat(this.value);">
       </div>
     </div>
 
     <div class="panel-group">
       <h3>Beat Bop Strength & Frequency</h3>
       <div class="control-row">
-        <label>Bop Strength (Intensity):</label>
+        <label>Bop Strength:</label>
         <input type="range" id="cam-bop-strength" min="0" max="0.12" step="0.005" value="0.04" oninput="cam.bopStrength = parseFloat(this.value)">
       </div>
       <div class="control-row">
         <label>Bop Every:</label>
         <select id="cam-bop-freq" onchange="cam.bopFreq = parseInt(this.value)">
-          <option value="1">1 Beat (Energetic / Fast)</option>
+          <option value="1">1 Beat (Energetic)</option>
           <option value="2">2 Beats</option>
-          <option value="4" selected>4 Beats (Classic FNF Measure)</option>
+          <option value="4" selected>4 Beats (Standard)</option>
         </select>
       </div>
     </div>
@@ -474,7 +506,7 @@
     <div class="panel-group">
       <h3>Playback Controls</h3>
       <div style="display:flex; gap:6px;">
-        <button class="btn btn-green" style="flex:1;" id="btn-play-pause" onclick="togglePlayback()">▶ Play</button>
+        <button class="btn btn-green" style="flex:1;" id="btn-play-pause-side" onclick="togglePlayback()">▶ Play</button>
         <button class="btn btn-gray" style="flex:1;" onclick="stopPlayback()">⏹ Stop</button>
       </div>
     </div>
@@ -488,6 +520,11 @@
         <label>Downscroll (Arrows come down):</label>
         <input type="checkbox" id="opt-downscroll" onchange="gameConfig.downscroll = this.checked">
       </div>
+      <div class="control-row">
+        <label>Scroll Speed Multiplier:</label>
+        <input type="range" id="opt-scroll-speed" min="1.0" max="4.0" step="0.1" value="2.2" oninput="updateScrollSpeed(this.value)">
+      </div>
+      <div style="text-align:right; font-size:11px; color:#38bdf8;" id="lbl-scroll-speed">2.2x</div>
     </div>
 
     <div class="panel-group">
@@ -497,13 +534,22 @@
         <input type="checkbox" id="opt-mobile-touch" onchange="toggleMobileTouchLayer(this.checked)">
       </div>
       <p style="font-size:11px; color:#94a3b8; margin-top:6px; line-height:1.5;">
-        Supports <b>sliding/dragging</b> across buttons without lifting your finger!
+        • Boyfriend's arrows snap directly over the touch buttons.<br>
+        • Drag your thumb across keys without lifting!
       </p>
     </div>
   </div>
 
-  <!-- Props Panel -->
+  <!-- Props & Scene Hierarchy Panel -->
   <div class="panel-content" id="tab-stage" style="display:none;">
+    <div class="panel-group">
+      <h3>Visual Quality</h3>
+      <div class="control-row">
+        <label>Pixel Art Mode (Crisp Pixels):</label>
+        <input type="checkbox" id="opt-pixel-art" onchange="togglePixelArt(this.checked)">
+      </div>
+    </div>
+
     <div class="panel-group">
       <h3>Background & Props</h3>
       <label class="file-input-btn">Upload Main Background
@@ -513,9 +559,12 @@
         <input type="file" accept="image/*" onchange="addProp(event)">
       </label>
     </div>
+
+    <!-- Scene Hierarchy Object Tree -->
     <div class="panel-group">
-      <h3>Layers & Objects</h3>
-      <div id="props-list" style="font-size:12px; display:flex; flex-direction:column; gap:4px;"></div>
+      <h3>Scene Hierarchy / Object Tree</h3>
+      <p style="font-size:11px; color:#94a3b8; margin-bottom:6px;">Click an object to select it directly (even if hidden behind another):</p>
+      <div id="object-tree-container"></div>
     </div>
   </div>
 
@@ -550,12 +599,11 @@
       <button class="btn btn-gray" id="btn-mode-cam" onclick="setToolMode('cam')">Camera Test</button>
     </div>
     <div class="top-btn-group">
-      <!-- .imp Import Button -->
       <label class="btn btn-gray" style="cursor:pointer; display:flex; align-items:center;">
         📂 Import .imp
         <input type="file" id="imp-file-input" accept=".imp,.json" style="display:none;" onchange="handleImportIMP(event)">
       </label>
-      <button class="btn btn-green" onclick="exportIMPPackage()">📦 Export .imp Package</button>
+      <button class="btn btn-green" onclick="exportIMPPackage(this)">📦 Export .imp Package</button>
     </div>
   </div>
 
@@ -570,7 +618,7 @@
     <canvas id="stageCanvas"></canvas>
     <div id="status-info">Selected: <span id="lbl-selected" style="color:#39ff14">bf</span> | Mode: <span id="lbl-mode" style="color:#38bdf8">move</span></div>
 
-    <!-- V-Slice Mobile Touch Controls Layer -->
+    <!-- V-Slice Mobile Touch Controls Layer (Small, at bottom) -->
     <div id="mobile-touch-layer">
       <div class="touch-hitbox-container">
         <div class="touch-hitbox" data-lane="0">◄</div>
@@ -581,17 +629,17 @@
     </div>
   </div>
 
-  <!-- Timeline Bar with StartPos & Scrubbing -->
+  <!-- Timeline Bar with StartPos & Draggable Event Markers -->
   <footer id="timeline-bar">
     <div class="timeline-header">
-      <div style="display:flex; gap:10px; align-items:center;">
-        <span style="font-weight:600; color:#cbd5e1;">Song Timeline</span>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="btn btn-green" style="padding:3px 10px; font-size:12px;" id="btn-play-pause-main" onclick="togglePlayback()">▶ Play</button>
         <button class="btn btn-gray" style="padding:3px 8px; font-size:11px; color:#ffcc00;" onclick="setStartPos()">🚩 Set StartPos</button>
-        <button class="btn btn-gray" style="padding:3px 8px; font-size:11px;" onclick="playFromStartPos()">▶ Play from StartPos</button>
+        <button class="btn btn-gray" style="padding:3px 8px; font-size:11px;" onclick="playFromStartPos()">▶ From StartPos</button>
       </div>
       <div>
-        <span style="color:#ffcc00; font-family:monospace; margin-right:12px;" id="lbl-startpos-time">StartPos: 00:00.000</span>
-        <span style="color:#38bdf8; font-family:monospace;" id="lbl-current-time">00:00.000</span>
+        <span style="color:#ffcc00; font-family:monospace; margin-right:12px; font-size:11px;" id="lbl-startpos-time">StartPos: 00:00.000</span>
+        <span style="color:#38bdf8; font-family:monospace; font-weight:bold;" id="lbl-current-time">00:00.000</span>
       </div>
     </div>
     <div class="timeline-track" id="timelineTrack" onclick="scrubTimeline(event)">
@@ -602,7 +650,7 @@
   </footer>
 </main>
 
-<!-- FRAME ANIMATION STUDIO MODAL -->
+<!-- Modals -->
 <div id="frame-studio-modal">
   <div class="studio-modal-header">
     <h2 id="studio-character-title">Editing Character</h2>
@@ -614,9 +662,7 @@
       <button class="btn btn-green" onclick="closeFrameStudio()">Done / Back to Stage</button>
     </div>
   </div>
-
   <div class="grid-container" id="poses-grid-container"></div>
-
   <div id="frame-inspector">
     <div style="font-size:13px; font-weight:600; color:#38bdf8;">
       Selected: <span id="lbl-insp-pose">IDLE</span> - Frame <span id="lbl-insp-idx">1</span>
@@ -634,22 +680,18 @@
   </div>
 </div>
 
-<!-- SPRITESHEET SLICER POPUP -->
 <div id="slicer-modal">
   <div class="modal-card">
     <h3 style="margin-bottom:12px; color:#39ff14;">Upload & Slice Sprite Sheet</h3>
     <p style="font-size:12px; color:#94a3b8; margin-bottom:14px;">Select an image and specify grid rows/columns to extract frames.</p>
-    
     <label class="file-input-btn" style="margin-bottom:14px;">
       Select Sprite Sheet (.png)
       <input type="file" id="slicer-file-input" accept="image/*" onchange="previewSlicerImage(event)">
     </label>
-
     <div style="display:flex; gap:12px; margin-bottom:14px; font-size:13px;">
       <label style="flex:1;">Rows: <input type="number" id="slicer-rows" value="2" min="1" max="20" style="width:100%; margin-top:4px; padding:6px; background:#0d101a; border:1px solid #28334a; color:#fff; border-radius:4px;"></label>
       <label style="flex:1;">Columns: <input type="number" id="slicer-cols" value="4" min="1" max="20" style="width:100%; margin-top:4px; padding:6px; background:#0d101a; border:1px solid #28334a; color:#fff; border-radius:4px;"></label>
     </div>
-
     <div style="margin-bottom:16px; font-size:13px;">
       <label>Target Pose:
         <select id="slicer-target-pose" style="width:100%; margin-top:4px; padding:6px; background:#0d101a; border:1px solid #28334a; color:#39ff14; border-radius:4px;">
@@ -661,7 +703,6 @@
         </select>
       </label>
     </div>
-
     <div style="display:flex; justify-content:flex-end; gap:8px;">
       <button class="btn btn-gray" onclick="closeSlicerModal()">Cancel</button>
       <button class="btn btn-green" onclick="processSlices()">Slice & Add Frames</button>
@@ -669,18 +710,14 @@
   </div>
 </div>
 
-<!-- SMART BLACKOUT / STAGE TRANSITION CONFIG MODAL -->
 <div id="transition-modal">
   <div class="modal-card">
     <h3 style="margin-bottom:10px; color:#39ff14;">Smart Blackout & Stage Shift</h3>
     <p style="font-size:12px; color:#94a3b8; margin-bottom:14px;">Transition stages with custom blackout layering and intensity overlays.</p>
-
     <div class="control-row">
       <label>Target Phase to reveal:</label>
       <select id="trans-target-phase" style="width:130px;"></select>
     </div>
-
-    <!-- UI Visibility Scope -->
     <div class="control-row">
       <label>Blackout Layering:</label>
       <select id="trans-ui-mode" style="width:180px;">
@@ -688,8 +725,6 @@
         <option value="hide_all">Hide Everything (Cinematic)</option>
       </select>
     </div>
-
-    <!-- Native Event Overlays -->
     <div class="control-row">
       <label>Peak Transition Flash:</label>
       <select id="trans-peak-flash" style="width:180px;">
@@ -707,7 +742,6 @@
         <option value="0">No Shake</option>
       </select>
     </div>
-
     <div class="control-row">
       <label>Fade Out (sec):</label>
       <input type="number" id="trans-fade-out" step="0.1" value="0.4">
@@ -720,7 +754,6 @@
       <label>Fade In (sec):</label>
       <input type="number" id="trans-fade-in" step="0.1" value="0.5">
     </div>
-
     <div style="margin: 10px 0;">
       <label style="font-size:12px; color:#94a3b8;">Optional Cutscene Overlay Image during blackout:</label>
       <label class="file-input-btn">
@@ -728,7 +761,6 @@
         <input type="file" accept="image/*" onchange="loadTransitionOverlay(event)">
       </label>
     </div>
-
     <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
       <button class="btn btn-gray" onclick="closeTransitionModal()">Cancel</button>
       <button class="btn btn-green" onclick="saveTransitionEvent()">Save Trigger</button>
@@ -736,6 +768,9 @@
   </div>
 </div>
 
+<!-- 3 Clean Modular JS Files -->
+<script src="engine.js"></script>
 <script src="studio.js"></script>
+<script src="events.js"></script>
 </body>
 </html>
