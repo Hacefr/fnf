@@ -116,7 +116,7 @@
   .file-input-btn:hover { background: #242e47; border-color: #38bdf8; }
   .file-input-btn input { display: none; }
 
-  /* Viewport */
+  /* Viewport Area */
   #viewport-area {
     flex: 1;
     display: flex;
@@ -135,6 +135,34 @@
     padding: 0 16px;
   }
   .top-btn-group { display: flex; gap: 8px; align-items: center; }
+
+  /* Phase Tabs Bar */
+  #phase-bar {
+    height: 38px;
+    background: #0d101a;
+    border-bottom: 1px solid #1a2336;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 8px;
+  }
+  .phase-tab {
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: bold;
+    border-radius: 4px;
+    background: #151a29;
+    color: #94a3b8;
+    cursor: pointer;
+    border: 1px solid #20293d;
+    transition: 0.15s;
+  }
+  .phase-tab.active {
+    background: #39ff14;
+    color: #000;
+    border-color: #39ff14;
+    box-shadow: 0 0 10px rgba(57, 255, 20, 0.3);
+  }
 
   #stage-canvas-container {
     flex: 1;
@@ -156,7 +184,60 @@
     pointer-events: none;
   }
 
-  /* --- Frame Animation Studio Modal --- */
+  /* Bottom Timeline Bar */
+  #timeline-bar {
+    height: 120px;
+    background: #111420;
+    border-top: 2px solid #1a2336;
+    display: flex;
+    flex-direction: column;
+    padding: 10px 16px;
+    z-index: 10;
+  }
+  .timeline-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 12px;
+  }
+  .timeline-track {
+    flex: 1;
+    background: #090c14;
+    border: 1px solid #1f2738;
+    border-radius: 6px;
+    position: relative;
+    cursor: pointer;
+    overflow: hidden;
+  }
+  .timeline-playhead {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #38bdf8;
+    pointer-events: none;
+  }
+  .timeline-startpos {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: #ffcc00;
+    box-shadow: 0 0 8px #ffcc00;
+    pointer-events: none;
+  }
+  .timeline-event-marker {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: #ff1744;
+    box-shadow: 0 0 6px #ff1744;
+    pointer-events: none;
+  }
+
+  /* Frame Studio Modal */
   #frame-studio-modal {
     display: none;
     position: fixed;
@@ -167,7 +248,6 @@
     padding: 24px;
     backdrop-filter: blur(4px);
   }
-
   .studio-modal-header {
     display: flex;
     justify-content: space-between;
@@ -183,7 +263,6 @@
     text-transform: uppercase;
   }
 
-  /* Animation Frame Grid (Matching Mockup) */
   .grid-container {
     flex: 1;
     overflow-y: auto;
@@ -192,7 +271,6 @@
     gap: 14px;
     padding-right: 8px;
   }
-
   .pose-row {
     background: #111522;
     border: 3px solid #000;
@@ -202,7 +280,6 @@
     min-height: 120px;
     overflow-x: auto;
   }
-
   .pose-label-cell {
     width: 140px;
     min-width: 140px;
@@ -213,109 +290,39 @@
     flex-direction: column;
     justify-content: space-between;
   }
-  .pose-label-cell h4 {
-    font-size: 18px;
-    font-style: italic;
-    color: #cbd5e1;
-  }
-
-  .frames-strip {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 16px;
-    flex: 1;
-  }
-
+  .pose-label-cell h4 { font-size: 18px; font-style: italic; color: #cbd5e1; }
+  .frames-strip { display: flex; align-items: center; gap: 12px; padding: 10px 16px; flex: 1; }
   .frame-cell {
-    width: 95px;
-    height: 95px;
-    min-width: 95px;
-    background: #1b2136;
-    border: 3px solid #000;
-    border-radius: 4px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    cursor: pointer;
-    transition: 0.15s;
+    width: 95px; height: 95px; min-width: 95px;
+    background: #1b2136; border: 3px solid #000; border-radius: 4px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    position: relative; cursor: pointer; transition: 0.15s;
   }
-  .frame-cell:hover {
-    border-color: #39ff14;
-    transform: translateY(-2px);
-  }
-  .frame-cell.selected {
-    border-color: #38bdf8;
-    box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
-  }
-
-  .frame-cell img {
-    max-width: 80%;
-    max-height: 70%;
-    object-fit: contain;
-  }
-  .frame-cell span {
-    position: absolute;
-    bottom: 2px;
-    font-size: 10px;
-    font-family: monospace;
-    color: #94a3b8;
-  }
-
+  .frame-cell:hover { border-color: #39ff14; transform: translateY(-2px); }
+  .frame-cell.selected { border-color: #38bdf8; box-shadow: 0 0 10px rgba(56, 189, 248, 0.4); }
+  .frame-cell img { max-width: 80%; max-height: 70%; object-fit: contain; }
+  .frame-cell span { position: absolute; bottom: 2px; font-size: 10px; font-family: monospace; color: #94a3b8; }
   .add-frame-cell {
-    width: 95px;
-    height: 95px;
-    min-width: 95px;
-    background: #131726;
-    border: 3px dashed #303d5c;
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    font-weight: bold;
-    color: #38bdf8;
-    cursor: pointer;
-    text-align: center;
-    padding: 8px;
+    width: 95px; height: 95px; min-width: 95px;
+    background: #131726; border: 3px dashed #303d5c; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: bold; color: #38bdf8; cursor: pointer; text-align: center; padding: 8px;
   }
-  .add-frame-cell:hover {
-    background: #192036;
-    border-color: #38bdf8;
-  }
+  .add-frame-cell:hover { background: #192036; border-color: #38bdf8; }
 
-  /* Sub-inspector for selected frame */
   #frame-inspector {
-    display: none;
-    background: #141926;
-    border: 2px solid #2c3852;
-    border-radius: 8px;
-    padding: 12px 18px;
-    margin-top: 12px;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
+    display: none; background: #141926; border: 2px solid #2c3852; border-radius: 8px;
+    padding: 12px 18px; margin-top: 12px; align-items: center; justify-content: space-between; gap: 16px;
   }
 
   /* Spritesheet Slicer Popup */
-  #slicer-modal {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.85);
-    z-index: 1100;
-    align-items: center;
-    justify-content: center;
+  #slicer-modal, #transition-modal {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+    z-index: 1100; align-items: center; justify-content: center;
   }
-  .slicer-card {
-    background: #131826;
-    border: 2px solid #39ff14;
-    border-radius: 10px;
-    padding: 20px;
-    width: 440px;
-    max-width: 90vw;
+  .modal-card {
+    background: #131826; border: 2px solid #39ff14; border-radius: 10px;
+    padding: 20px; width: 440px; max-width: 90vw;
   }
 </style>
 </head>
@@ -353,15 +360,17 @@
 
     <!-- Frame Studio Launcher -->
     <div class="panel-group">
-      <h3>Animation Frames</h3>
-      <p style="font-size:11px; color:#94a3b8; margin-bottom:8px;">Add multi-frame poses or slice a sprite sheet.</p>
+      <h3>Phase-Specific Poses</h3>
+      <p style="font-size:11px; color:#94a3b8; margin-bottom:8px;">
+        Editing sprites for <b id="lbl-phase-name" style="color:#39ff14">Phase 1</b> only.
+      </p>
       <button class="btn btn-green" style="width:100%; padding:10px;" onclick="openFrameStudio()">
         🎬 Open Frame Grid Editor
       </button>
     </div>
 
     <div class="panel-group">
-      <h3>Test Poses</h3>
+      <h3>Test Current Poses</h3>
       <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;">
         <button class="btn btn-gray" onclick="triggerPose('idle')">Idle</button>
         <button class="btn btn-gray" onclick="triggerPose('singLEFT')">Left</button>
@@ -392,6 +401,14 @@
   <!-- Events Panel -->
   <div class="panel-content" id="tab-events" style="display:none;">
     <div class="panel-group">
+      <h3>Phase & Cutscene Triggers</h3>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <button class="btn btn-green" onclick="openTransitionModal()">+ Add Blackout / Phase Shift</button>
+        <button class="btn btn-gray" onclick="previewCurrentTransition()">▶ Test Transition Live</button>
+      </div>
+    </div>
+
+    <div class="panel-group">
       <h3>Screen Effects</h3>
       <div style="display:flex; flex-direction:column; gap:8px;">
         <button class="btn btn-red" onclick="triggerFlash('#ff1744', 0.6)">🚨 Reactor Red Flash</button>
@@ -416,13 +433,40 @@
     </div>
   </div>
 
+  <!-- Phase Switcher Strip -->
+  <div id="phase-bar">
+    <span style="font-size:11px; font-weight:bold; color:#64748b; text-transform:uppercase;">Phases:</span>
+    <div id="phase-tabs-container" style="display:flex; gap:6px;"></div>
+    <button class="btn btn-gray" style="padding:4px 8px; font-size:11px;" onclick="addNewPhase()">+ Add Phase</button>
+  </div>
+
   <div id="stage-canvas-container">
     <canvas id="stageCanvas"></canvas>
     <div id="status-info">Selected: <span id="lbl-selected" style="color:#39ff14">bf</span> | Mode: <span id="lbl-mode" style="color:#38bdf8">move</span></div>
   </div>
+
+  <!-- Timeline Bar with StartPos & Scrubbing -->
+  <footer id="timeline-bar">
+    <div class="timeline-header">
+      <div style="display:flex; gap:10px; align-items:center;">
+        <span style="font-weight:600; color:#cbd5e1;">Song Timeline</span>
+        <button class="btn btn-gray" style="padding:3px 8px; font-size:11px; color:#ffcc00;" onclick="setStartPos()">🚩 Set StartPos</button>
+        <button class="btn btn-gray" style="padding:3px 8px; font-size:11px;" onclick="playFromStartPos()">▶ Play from StartPos</button>
+      </div>
+      <div>
+        <span style="color:#ffcc00; font-family:monospace; margin-right:12px;" id="lbl-startpos-time">StartPos: 00:00.000</span>
+        <span style="color:#38bdf8; font-family:monospace;" id="lbl-current-time">00:00.000</span>
+      </div>
+    </div>
+    <div class="timeline-track" id="timelineTrack" onclick="scrubTimeline(event)">
+      <div class="timeline-playhead" id="playhead" style="left: 0%;"></div>
+      <div class="timeline-startpos" id="startposMarker" style="left: 0%;"></div>
+      <div id="eventMarkersContainer"></div>
+    </div>
+  </footer>
 </main>
 
-<!-- FRAME ANIMATION STUDIO MODAL (Mockup Implementation) -->
+<!-- FRAME ANIMATION STUDIO MODAL -->
 <div id="frame-studio-modal">
   <div class="studio-modal-header">
     <h2 id="studio-character-title">Editing Character</h2>
@@ -435,12 +479,8 @@
     </div>
   </div>
 
-  <!-- Rows Grid -->
-  <div class="grid-container" id="poses-grid-container">
-    <!-- Rows dynamically generated: IDLE, UP, DOWN, LEFT, RIGHT -->
-  </div>
+  <div class="grid-container" id="poses-grid-container"></div>
 
-  <!-- Frame Inspector (Edit/Replace/Resize Selected Frame) -->
   <div id="frame-inspector">
     <div style="font-size:13px; font-weight:600; color:#38bdf8;">
       Selected: <span id="lbl-insp-pose">IDLE</span> - Frame <span id="lbl-insp-idx">1</span>
@@ -460,9 +500,9 @@
 
 <!-- SPRITESHEET SLICER POPUP -->
 <div id="slicer-modal">
-  <div class="slicer-card">
+  <div class="modal-card">
     <h3 style="margin-bottom:12px; color:#39ff14;">Upload & Slice Sprite Sheet</h3>
-    <p style="font-size:12px; color:#94a3b8; margin-bottom:14px;">Select an image and specify the grid dimensions to extract frames automatically.</p>
+    <p style="font-size:12px; color:#94a3b8; margin-bottom:14px;">Select an image and specify grid rows/columns to extract frames.</p>
     
     <label class="file-input-btn" style="margin-bottom:14px;">
       Select Sprite Sheet (.png)
@@ -489,6 +529,44 @@
     <div style="display:flex; justify-content:flex-end; gap:8px;">
       <button class="btn btn-gray" onclick="closeSlicerModal()">Cancel</button>
       <button class="btn btn-green" onclick="processSlices()">Slice & Add Frames</button>
+    </div>
+  </div>
+</div>
+
+<!-- BLACKOUT / PHASE TRANSITION CONFIG MODAL -->
+<div id="transition-modal">
+  <div class="modal-card">
+    <h3 style="margin-bottom:12px; color:#39ff14;">Phase Blackout & Cutscene Trigger</h3>
+    <p style="font-size:12px; color:#94a3b8; margin-bottom:14px;">Screen fades black, characters swap and move, then fades in.</p>
+
+    <div class="control-row">
+      <label>Target Phase to reveal:</label>
+      <select id="trans-target-phase" style="width:110px;"></select>
+    </div>
+    <div class="control-row">
+      <label>Fade to Black duration (sec):</label>
+      <input type="number" id="trans-fade-out" step="0.1" value="0.4">
+    </div>
+    <div class="control-row">
+      <label>Hold pitch black (sec):</label>
+      <input type="number" id="trans-hold" step="0.1" value="1.2">
+    </div>
+    <div class="control-row">
+      <label>Fade back in duration (sec):</label>
+      <input type="number" id="trans-fade-in" step="0.1" value="0.5">
+    </div>
+
+    <div style="margin: 12px 0;">
+      <label style="font-size:12px; color:#94a3b8;">Optional Cutscene Overlay Image during blackout:</label>
+      <label class="file-input-btn">
+        Upload Overlay Graphic
+        <input type="file" accept="image/*" onchange="loadTransitionOverlay(event)">
+      </label>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
+      <button class="btn btn-gray" onclick="closeTransitionModal()">Cancel</button>
+      <button class="btn btn-green" onclick="saveTransitionEvent()">Save Trigger</button>
     </div>
   </div>
 </div>
