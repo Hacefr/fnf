@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>FNF Song & Stage Builder Studio</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; touch-action: manipulation; }
   body {
     background: #090b10;
     color: #e2e8f0;
@@ -13,6 +13,7 @@
     display: flex;
     height: 100vh;
     overflow: hidden;
+    user-select: none;
   }
 
   /* Left Inspector Sidebar */
@@ -133,6 +134,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 0 16px;
+    z-index: 10;
   }
   .top-btn-group { display: flex; gap: 8px; align-items: center; }
 
@@ -145,6 +147,7 @@
     align-items: center;
     padding: 0 16px;
     gap: 8px;
+    z-index: 10;
   }
   .phase-tab {
     padding: 4px 12px;
@@ -182,23 +185,24 @@
     border-radius: 6px;
     border: 1px solid #20293d;
     pointer-events: none;
+    z-index: 15;
   }
 
   /* Bottom Timeline Bar */
   #timeline-bar {
-    height: 120px;
+    height: 110px;
     background: #111420;
     border-top: 2px solid #1a2336;
     display: flex;
     flex-direction: column;
-    padding: 10px 16px;
+    padding: 8px 16px;
     z-index: 10;
   }
   .timeline-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     font-size: 12px;
   }
   .timeline-track {
@@ -224,6 +228,52 @@
     position: absolute;
     top: 0; bottom: 0; width: 4px;
     background: #ff1744; box-shadow: 0 0 6px #ff1744; pointer-events: none;
+  }
+
+  /* V-Slice Mobile Touch Controls Layer */
+  #mobile-touch-layer {
+    display: none;
+    position: absolute;
+    bottom: 115px;
+    left: 0;
+    right: 0;
+    height: 150px;
+    z-index: 25;
+    pointer-events: auto;
+    padding: 10px 20px;
+  }
+  .touch-hitbox-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    align-items: center;
+  }
+  .touch-hitbox {
+    flex: 1;
+    max-width: 140px;
+    height: 100%;
+    border-radius: 12px;
+    background: rgba(18, 24, 38, 0.45);
+    border: 3px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    color: #fff;
+    transition: 0.1s;
+    user-select: none;
+  }
+  .touch-hitbox[data-lane="0"] { border-color: rgba(194, 75, 153, 0.6); }
+  .touch-hitbox[data-lane="1"] { border-color: rgba(0, 255, 255, 0.6); }
+  .touch-hitbox[data-lane="2"] { border-color: rgba(18, 250, 5, 0.6); }
+  .touch-hitbox[data-lane="3"] { border-color: rgba(249, 57, 63, 0.6); }
+
+  .touch-hitbox.pressed {
+    transform: scale(0.95);
+    background: rgba(255, 255, 255, 0.35);
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.8);
   }
 
   /* Frame Studio & Modals */
@@ -276,7 +326,7 @@
   }
   .modal-card {
     background: #131826; border: 2px solid #39ff14; border-radius: 10px;
-    padding: 20px; width: 440px; max-width: 90vw;
+    padding: 20px; width: 470px; max-width: 92vw;
   }
 </style>
 </head>
@@ -292,6 +342,7 @@
     <button class="tab-btn active" onclick="switchTab('character')">Characters</button>
     <button class="tab-btn" onclick="switchTab('bop')">Camera & Bop</button>
     <button class="tab-btn" onclick="switchTab('audio')">Audio / Chart</button>
+    <button class="tab-btn" onclick="switchTab('mobile')">Mobile & Controls</button>
     <button class="tab-btn" onclick="switchTab('stage')">Props</button>
     <button class="tab-btn" onclick="switchTab('events')">Events</button>
   </div>
@@ -429,6 +480,28 @@
     </div>
   </div>
 
+  <!-- Mobile & Controls Panel -->
+  <div class="panel-content" id="tab-mobile" style="display:none;">
+    <div class="panel-group">
+      <h3>Arrow Direction & Scroll</h3>
+      <div class="control-row">
+        <label>Downscroll (Arrows come down):</label>
+        <input type="checkbox" id="opt-downscroll" onchange="gameConfig.downscroll = this.checked">
+      </div>
+    </div>
+
+    <div class="panel-group">
+      <h3>V-Slice Mobile Touch Controls</h3>
+      <div class="control-row">
+        <label>Enable Touch Hitboxes:</label>
+        <input type="checkbox" id="opt-mobile-touch" onchange="toggleMobileTouchLayer(this.checked)">
+      </div>
+      <p style="font-size:11px; color:#94a3b8; margin-top:6px; line-height:1.5;">
+        Supports <b>sliding/dragging</b> across buttons without lifting your finger!
+      </p>
+    </div>
+  </div>
+
   <!-- Props Panel -->
   <div class="panel-content" id="tab-stage" style="display:none;">
     <div class="panel-group">
@@ -449,15 +522,15 @@
   <!-- Events Panel -->
   <div class="panel-content" id="tab-events" style="display:none;">
     <div class="panel-group">
-      <h3>Phase & Cutscene Triggers</h3>
+      <h3>Smart Blackout & Stage Shifts</h3>
       <div style="display:flex; flex-direction:column; gap:8px;">
-        <button class="btn btn-green" onclick="openTransitionModal()">+ Add Blackout / Phase Shift</button>
+        <button class="btn btn-green" onclick="openTransitionModal()">+ Add Smart Blackout Stage Shift</button>
         <button class="btn btn-gray" onclick="previewCurrentTransition()">▶ Test Transition Live</button>
       </div>
     </div>
 
     <div class="panel-group">
-      <h3>Screen Effects</h3>
+      <h3>Manual Screen Effects</h3>
       <div style="display:flex; flex-direction:column; gap:8px;">
         <button class="btn btn-red" onclick="triggerFlash('#ff1744', 0.6)">🚨 Reactor Red Flash</button>
         <button class="btn btn-gray" onclick="triggerFlash('#ffffff', 0.8)">⚡ White Flash</button>
@@ -477,7 +550,11 @@
       <button class="btn btn-gray" id="btn-mode-cam" onclick="setToolMode('cam')">Camera Test</button>
     </div>
     <div class="top-btn-group">
-      <button class="btn btn-gray" onclick="exportProjectJSON()">Export JSON</button>
+      <!-- .imp Import Button -->
+      <label class="btn btn-gray" style="cursor:pointer; display:flex; align-items:center;">
+        📂 Import .imp
+        <input type="file" id="imp-file-input" accept=".imp,.json" style="display:none;" onchange="handleImportIMP(event)">
+      </label>
       <button class="btn btn-green" onclick="exportIMPPackage()">📦 Export .imp Package</button>
     </div>
   </div>
@@ -492,6 +569,16 @@
   <div id="stage-canvas-container">
     <canvas id="stageCanvas"></canvas>
     <div id="status-info">Selected: <span id="lbl-selected" style="color:#39ff14">bf</span> | Mode: <span id="lbl-mode" style="color:#38bdf8">move</span></div>
+
+    <!-- V-Slice Mobile Touch Controls Layer -->
+    <div id="mobile-touch-layer">
+      <div class="touch-hitbox-container">
+        <div class="touch-hitbox" data-lane="0">◄</div>
+        <div class="touch-hitbox" data-lane="1">▼</div>
+        <div class="touch-hitbox" data-lane="2">▲</div>
+        <div class="touch-hitbox" data-lane="3">►</div>
+      </div>
+    </div>
   </div>
 
   <!-- Timeline Bar with StartPos & Scrubbing -->
@@ -582,30 +669,59 @@
   </div>
 </div>
 
-<!-- BLACKOUT / PHASE TRANSITION CONFIG MODAL -->
+<!-- SMART BLACKOUT / STAGE TRANSITION CONFIG MODAL -->
 <div id="transition-modal">
   <div class="modal-card">
-    <h3 style="margin-bottom:12px; color:#39ff14;">Phase Blackout & Cutscene Trigger</h3>
-    <p style="font-size:12px; color:#94a3b8; margin-bottom:14px;">Screen fades black, characters swap and move, then fades in.</p>
+    <h3 style="margin-bottom:10px; color:#39ff14;">Smart Blackout & Stage Shift</h3>
+    <p style="font-size:12px; color:#94a3b8; margin-bottom:14px;">Transition stages with custom blackout layering and intensity overlays.</p>
 
     <div class="control-row">
       <label>Target Phase to reveal:</label>
-      <select id="trans-target-phase" style="width:110px;"></select>
+      <select id="trans-target-phase" style="width:130px;"></select>
+    </div>
+
+    <!-- UI Visibility Scope -->
+    <div class="control-row">
+      <label>Blackout Layering:</label>
+      <select id="trans-ui-mode" style="width:180px;">
+        <option value="keep_ui" selected>Keep UI Visible (Arrows & Bar)</option>
+        <option value="hide_all">Hide Everything (Cinematic)</option>
+      </select>
+    </div>
+
+    <!-- Native Event Overlays -->
+    <div class="control-row">
+      <label>Peak Transition Flash:</label>
+      <select id="trans-peak-flash" style="width:180px;">
+        <option value="#ff1744">🚨 Reactor Red Flash</option>
+        <option value="#ffffff" selected>⚡ White Flash</option>
+        <option value="#a855f7">💜 Dark Void Purple</option>
+        <option value="none">None</option>
+      </select>
     </div>
     <div class="control-row">
-      <label>Fade to Black duration (sec):</label>
+      <label>Peak Screen Shake:</label>
+      <select id="trans-peak-shake" style="width:180px;">
+        <option value="20" selected>Heavy Shake</option>
+        <option value="10">Mild Shake</option>
+        <option value="0">No Shake</option>
+      </select>
+    </div>
+
+    <div class="control-row">
+      <label>Fade Out (sec):</label>
       <input type="number" id="trans-fade-out" step="0.1" value="0.4">
     </div>
     <div class="control-row">
-      <label>Hold pitch black (sec):</label>
+      <label>Hold Pitch Black (sec):</label>
       <input type="number" id="trans-hold" step="0.1" value="1.2">
     </div>
     <div class="control-row">
-      <label>Fade back in duration (sec):</label>
+      <label>Fade In (sec):</label>
       <input type="number" id="trans-fade-in" step="0.1" value="0.5">
     </div>
 
-    <div style="margin: 12px 0;">
+    <div style="margin: 10px 0;">
       <label style="font-size:12px; color:#94a3b8;">Optional Cutscene Overlay Image during blackout:</label>
       <label class="file-input-btn">
         Upload Overlay Graphic
@@ -613,7 +729,7 @@
       </label>
     </div>
 
-    <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
+    <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
       <button class="btn btn-gray" onclick="closeTransitionModal()">Cancel</button>
       <button class="btn btn-green" onclick="saveTransitionEvent()">Save Trigger</button>
     </div>
