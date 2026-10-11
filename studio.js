@@ -1,498 +1,590 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FNF Song & Stage Builder Studio</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    background: #090b10;
-    color: #e2e8f0;
-    font-family: 'Segoe UI', system-ui, sans-serif;
-    display: flex;
-    height: 100vh;
-    overflow: hidden;
+// --- FNF Studio Engine: Phases, Isolated Sprites, StartPos & Transitions ---
+const canvas = document.getElementById('stageCanvas');
+const ctx = canvas.getContext('2d');
+const container = document.getElementById('stage-canvas-container');
+
+function resizeCanvas() {
+  canvas.width = container.clientWidth;
+  canvas.height = container.clientHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+
+// Camera System
+const cam = {
+  x: 0,
+  y: 0,
+  targetX: 0,
+  targetY: 0,
+  zoom: 0.9,
+  shakeIntensity: 0,
+  shakeDuration: 0,
+  flashColor: '#ffffff',
+  flashAlpha: 0
+};
+
+// =========================================================================
+// --- ISOLATED PHASES DATA ARCHITECTURE ---
+// =========================================================================
+
+function createEmptyPoses() {
+  return { idle: [], singUP: [], singDOWN: [], singLEFT: [], singRIGHT: [] };
+}
+
+function createDefaultCharacters() {
+  return {
+    dad: { id: 'dad', name: 'Opponent (Lime)', x: -380, y: 80, width: 220, height: 380, flipX: false, color: '#39ff14', currentPose: 'idle', fps: 12, animTimer: 0, poses: createEmptyPoses() },
+    gf:  { id: 'gf',  name: 'Girlfriend',      x: 0,    y: 10, width: 240, height: 320, flipX: false, color: '#a855f7', currentPose: 'idle', fps: 12, animTimer: 0, poses: createEmptyPoses() },
+    bf:  { id: 'bf',  name: 'Boyfriend',       x: 360,  y: 90, width: 200, height: 320, flipX: false, color: '#00ffff', currentPose: 'idle', fps: 12, animTimer: 0, poses: createEmptyPoses() }
+  };
+}
+
+// Multi-Phase State
+const phases = [
+  {
+    id: 'phase_1',
+    name: 'Phase 1',
+    characters: createDefaultCharacters(),
+    props: [],
+    stageBg: null
+  }
+];
+
+let activePhaseIndex = 0;
+function getCurPhase() { return phases[activePhaseIndex]; }
+
+let activeTargetId = 'bf'; // 'bf', 'dad', 'gf', or prop id
+let toolMode = 'move';     // 'move', 'resize', or 'cam'
+
+// Transform & Drag State
+let isInteracting = false;
+let activeHandle = null;
+let dragStartX = 0, dragStartY = 0;
+let initX = 0, initY = 0, initW = 0, initH = 0;
+
+// Coordinate transformations
+function screenToWorld(sx, sy) {
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  return {
+    x: (sx - cx) / cam.zoom + cam.x,
+    y: (sy - cy) / cam.zoom + cam.y
+  };
+}
+
+function getActiveTarget() {
+  const cp = getCurPhase();
+  if (cp.characters[activeTargetId]) return cp.characters[activeTargetId];
+  const p = cp.props.find(pr => pr.id === activeTargetId);
+  if (p) return p;
+  if (cp.stageBg && cp.stageBg.id === activeTargetId) return cp.stageBg;
+  return cp.characters.bf;
+}
+
+function getBounds(obj) {
+  return {
+    left: obj.x - obj.width / 2,
+    right: obj.x + obj.width / 2,
+    top: obj.y - obj.height / 2,
+    bottom: obj.y + obj.height / 2
+  };
+}
+
+function getHandles(obj) {
+  const b = getBounds(obj);
+  return {
+    tl: { x: b.left, y: b.top, cursor: 'nwse-resize' },
+    tr: { x: b.right, y: b.top, cursor: 'nesw-resize' },
+    bl: { x: b.left, y: b.bottom, cursor: 'nesw-resize' },
+    br: { x: b.right, y: b.bottom, cursor: 'nwse-resize' },
+    t:  { x: obj.x, y: b.top, cursor: 'ns-resize' },
+    b:  { x: obj.x, y: b.bottom, cursor: 'ns-resize' },
+    l:  { x: b.left, y: obj.y, cursor: 'ew-resize' },
+    r:  { x: b.right, y: obj.y, cursor: 'ew-resize' }
+  };
+}
+
+// =========================================================================
+// --- PHASE MANAGEMENT & CLONING ---
+// =========================================================================
+
+function renderPhaseTabs() {
+  const container = document.getElementById('phase-tabs-container');
+  container.innerHTML = '';
+  phases.forEach((p, idx) => {
+    const tab = document.createElement('div');
+    tab.className = `phase-tab ${idx === activePhaseIndex ? 'active' : ''}`;
+    tab.textContent = p.name;
+    tab.onclick = () => switchPhase(idx);
+    container.appendChild(tab);
+  });
+  document.getElementById('lbl-phase-name').textContent = getCurPhase().name;
+}
+
+function switchPhase(idx) {
+  activePhaseIndex = idx;
+  renderPhaseTabs();
+  selectTarget(activeTargetId);
+  refreshPropsList();
+}
+
+function addNewPhase() {
+  const newNum = phases.length + 1;
+  const prevPhase = getCurPhase();
+
+  // Create isolated characters for the new phase (carries over position baseline, but separate sprites!)
+  const newChars = createDefaultCharacters();
+  ['bf', 'dad', 'gf'].forEach(cid => {
+    newChars[cid].x = prevPhase.characters[cid].x;
+    newChars[cid].y = prevPhase.characters[cid].y;
+    newChars[cid].width = prevPhase.characters[cid].width;
+    newChars[cid].height = prevPhase.characters[cid].height;
+    newChars[cid].flipX = prevPhase.characters[cid].flipX;
+  });
+
+  phases.push({
+    id: `phase_${newNum}`,
+    name: `Phase ${newNum}`,
+    characters: newChars,
+    props: JSON.parse(JSON.stringify(prevPhase.props)),
+    stageBg: prevPhase.stageBg
+  });
+
+  switchPhase(phases.length - 1);
+}
+
+// =========================================================================
+// --- TIMELINE, STARTPOS & TRANSITION BLACKOUT ENGINE ---
+// =========================================================================
+
+let songDuration = 120000; // 2 minutes default (or audio track length)
+let currentTime = 0;
+let startPosTime = 0;
+let isPlaying = false;
+
+// Transition State
+const timelineEvents = []; // [{ time, targetPhaseIndex, fadeOut, hold, fadeIn, overlayImg }]
+let activeTransition = null;
+let transitionOverlayImg = null;
+
+function formatTime(ms) {
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  const remS = s % 60;
+  const remMs = Math.floor(ms % 1000);
+  return `${String(m).padStart(2,'0')}:${String(remS).padStart(2,'0')}.${String(remMs).padStart(3,'0')}`;
+}
+
+function setStartPos() {
+  startPosTime = currentTime;
+  document.getElementById('lbl-startpos-time').textContent = `StartPos: ${formatTime(startPosTime)}`;
+  const pct = (startPosTime / songDuration) * 100;
+  document.getElementById('startposMarker').style.left = `${pct}%`;
+}
+
+function playFromStartPos() {
+  currentTime = startPosTime;
+  isPlaying = true;
+}
+
+function scrubTimeline(e) {
+  const rect = document.getElementById('timelineTrack').getBoundingClientRect();
+  const clickX = e.clientX - rect.left;
+  const pct = Math.max(0, Math.min(1, clickX / rect.width));
+  currentTime = pct * songDuration;
+  document.getElementById('playhead').style.left = `${pct * 100}%`;
+  document.getElementById('lbl-current-time').textContent = formatTime(currentTime);
+}
+
+// Blackout & Transition Logic
+function openTransitionModal() {
+  const select = document.getElementById('trans-target-phase');
+  select.innerHTML = '';
+  phases.forEach((p, idx) => {
+    select.innerHTML += `<option value="${idx}">${p.name}</option>`;
+  });
+  document.getElementById('transition-modal').style.display = 'flex';
+}
+
+function closeTransitionModal() {
+  document.getElementById('transition-modal').style.display = 'none';
+}
+
+function loadTransitionOverlay(evt) {
+  const file = evt.target.files[0];
+  if (!file) return;
+  const img = new Image();
+  img.src = URL.createObjectURL(file);
+  img.onload = () => { transitionOverlayImg = img; };
+}
+
+function saveTransitionEvent() {
+  const targetPhase = parseInt(document.getElementById('trans-target-phase').value) || 0;
+  const fadeOut = parseFloat(document.getElementById('trans-fade-out').value) || 0.4;
+  const hold = parseFloat(document.getElementById('trans-hold').value) || 1.2;
+  const fadeIn = parseFloat(document.getElementById('trans-fade-in').value) || 0.5;
+
+  timelineEvents.push({
+    time: currentTime,
+    targetPhaseIndex: targetPhase,
+    fadeOut: fadeOut,
+    hold: hold,
+    fadeIn: fadeIn,
+    overlayImg: transitionOverlayImg
+  });
+
+  renderEventMarkers();
+  closeTransitionModal();
+}
+
+function renderEventMarkers() {
+  const container = document.getElementById('eventMarkersContainer');
+  container.innerHTML = '';
+  timelineEvents.forEach(ev => {
+    const pct = (ev.time / songDuration) * 100;
+    const m = document.createElement('div');
+    m.className = 'timeline-event-marker';
+    m.style.left = `${pct}%`;
+    container.appendChild(m);
+  });
+}
+
+// Live Transition Previewer
+function previewCurrentTransition() {
+  const nextIdx = (activePhaseIndex + 1) % phases.length;
+  triggerBlackoutTransition({
+    fadeOut: 0.4,
+    hold: 1.2,
+    fadeIn: 0.5,
+    targetPhaseIndex: nextIdx,
+    overlayImg: transitionOverlayImg
+  });
+}
+
+function triggerBlackoutTransition(trans) {
+  activeTransition = {
+    ...trans,
+    elapsed: 0,
+    total: trans.fadeOut + trans.hold + trans.fadeIn,
+    swapped: false
+  };
+}
+
+// =========================================================================
+// --- MOUSE CANVAS DRAG & 4-SIDE RESIZE ---
+// =========================================================================
+
+canvas.addEventListener('mousedown', (e) => {
+  if (toolMode === 'cam') return;
+  const rect = canvas.getBoundingClientRect();
+  const world = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+  const target = getActiveTarget();
+
+  if (toolMode === 'resize' && target) {
+    const handles = getHandles(target);
+    const handleThreshold = 12 / cam.zoom;
+    for (const [key, pt] of Object.entries(handles)) {
+      if (Math.hypot(world.x - pt.x, world.y - pt.y) <= handleThreshold) {
+        isInteracting = true;
+        activeHandle = key;
+        dragStartX = world.x; dragStartY = world.y;
+        initX = target.x; initY = target.y; initW = target.width; initH = target.height;
+        return;
+      }
+    }
   }
 
-  /* Left Inspector Sidebar */
-  #sidebar {
-    width: 330px;
-    background: #111420;
-    border-right: 2px solid #1a2336;
-    display: flex;
-    flex-direction: column;
-    z-index: 20;
+  const cp = getCurPhase();
+  const allObjects = [cp.characters.bf, cp.characters.dad, cp.characters.gf, ...cp.props.slice().reverse()];
+  if (cp.stageBg) allObjects.push(cp.stageBg);
+
+  for (const obj of allObjects) {
+    const b = getBounds(obj);
+    if (world.x >= b.left && world.x <= b.right && world.y >= b.top && world.y <= b.bottom) {
+      selectTarget(obj.id);
+      isInteracting = true;
+      activeHandle = 'body';
+      dragStartX = world.x; dragStartY = world.y;
+      initX = obj.x; initY = obj.y;
+      return;
+    }
+  }
+});
+
+window.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const world = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+  const target = getActiveTarget();
+
+  if (!isInteracting && toolMode === 'resize' && target) {
+    const handles = getHandles(target);
+    let matched = 'default';
+    for (const pt of Object.values(handles)) {
+      if (Math.hypot(world.x - pt.x, world.y - pt.y) <= 12 / cam.zoom) {
+        matched = pt.cursor;
+        break;
+      }
+    }
+    canvas.style.cursor = matched;
+  } else if (!isInteracting) {
+    canvas.style.cursor = toolMode === 'move' ? 'grab' : 'default';
   }
 
-  .sidebar-header {
-    padding: 14px 16px;
-    background: #151a29;
-    border-bottom: 1px solid #1f283d;
-  }
-  .sidebar-header h2 { font-size: 15px; color: #39ff14; letter-spacing: 1px; }
+  if (!isInteracting || !target) return;
+  const dx = world.x - dragStartX;
+  const dy = world.y - dragStartY;
 
-  .tab-buttons {
-    display: flex;
-    background: #0d101a;
-    border-bottom: 1px solid #1f283d;
-  }
-  .tab-btn {
-    flex: 1;
-    padding: 10px 4px;
-    background: none;
-    border: none;
-    color: #94a3b8;
-    cursor: pointer;
-    font-size: 11px;
-    font-weight: 600;
-  }
-  .tab-btn.active { color: #39ff14; border-bottom: 2px solid #39ff14; background: #151a29; }
-
-  .panel-content {
-    flex: 1;
-    overflow-y: auto;
-    padding: 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+  if (activeHandle === 'body') {
+    canvas.style.cursor = 'grabbing';
+    target.x = Math.round(initX + dx);
+    target.y = Math.round(initY + dy);
+    return;
   }
 
-  .panel-group {
-    background: #151a29;
-    border: 1px solid #20293d;
-    border-radius: 8px;
-    padding: 12px;
+  let newW = initW, newH = initH, newX = initX, newY = initY;
+  if (activeHandle.includes('r')) { newW = Math.max(20, initW + dx); newX = initX + (newW - initW) / 2; }
+  else if (activeHandle.includes('l')) { newW = Math.max(20, initW - dx); newX = initX - (newW - initW) / 2; }
+  if (activeHandle.includes('b')) { newH = Math.max(20, initH + dy); newY = initY + (newH - initH) / 2; }
+  else if (activeHandle.includes('t')) { newH = Math.max(20, initH - dy); newY = initY - (newH - initH) / 2; }
+
+  target.width = Math.round(newW);
+  target.height = Math.round(newH);
+  target.x = Math.round(newX);
+  target.y = Math.round(newY);
+});
+
+window.addEventListener('mouseup', () => {
+  isInteracting = false;
+  activeHandle = null;
+  canvas.style.cursor = 'default';
+});
+
+// --- UI Selection & Modes ---
+function setToolMode(mode) {
+  toolMode = mode;
+  document.getElementById('lbl-mode').textContent = mode;
+  ['move', 'resize', 'cam'].forEach(m => {
+    const btn = document.getElementById(`btn-mode-${m}`);
+    btn.className = (m === mode) ? 'btn btn-active' : 'btn btn-gray';
+  });
+}
+
+function selectTarget(id) {
+  activeTargetId = id;
+  const cp = getCurPhase();
+  if (cp.characters[id]) {
+    document.getElementById('char-select').value = id;
+    document.getElementById('char-flip').checked = cp.characters[id].flipX;
   }
-  .panel-group h3 { font-size: 12px; color: #cbd5e1; margin-bottom: 8px; text-transform: uppercase; }
+  const t = getActiveTarget();
+  document.getElementById('lbl-selected').textContent = t ? (t.name || t.id) : 'none';
+}
 
-  .control-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-    font-size: 12px;
+function updateSelectedTransform() {
+  const t = getActiveTarget();
+  if (t && t.flipX !== undefined) {
+    t.flipX = document.getElementById('char-flip').checked;
   }
-  .control-row label { color: #94a3b8; }
-  .control-row input[type="number"], .control-row select {
-    background: #0d101a;
-    border: 1px solid #26334d;
-    color: #fff;
-    padding: 4px 6px;
-    border-radius: 4px;
-    width: 80px;
-    font-size: 12px;
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.panel-content').forEach(p => p.style.display = 'none');
+  document.getElementById(`tab-${tab}`).style.display = 'flex';
+  event.target.classList.add('active');
+}
+
+function triggerPose(pose) {
+  const t = getActiveTarget();
+  if (t && t.poses) { t.currentPose = pose; t.animTimer = 0; }
+}
+
+function loadBackground(evt) {
+  const file = evt.target.files[0];
+  if (!file) return;
+  const img = new Image();
+  img.src = URL.createObjectURL(file);
+  img.onload = () => {
+    getCurPhase().stageBg = { id: 'bg', name: 'Background', img: img, x: 0, y: 0, width: img.width, height: img.height };
+    refreshPropsList();
+  };
+}
+
+function addProp(evt) {
+  const file = evt.target.files[0];
+  if (!file) return;
+  const img = new Image();
+  img.src = URL.createObjectURL(file);
+  img.onload = () => {
+    const p = {
+      id: 'prop_' + Date.now(),
+      name: file.name.split('.')[0] || 'Prop',
+      img: img,
+      x: 0, y: 0,
+      width: img.width || 200,
+      height: img.height || 200
+    };
+    getCurPhase().props.push(p);
+    selectTarget(p.id);
+    refreshPropsList();
+  };
+}
+
+function refreshPropsList() {
+  const list = document.getElementById('props-list');
+  list.innerHTML = '';
+  const cp = getCurPhase();
+  if (cp.stageBg) {
+    list.innerHTML += `<div style="padding:4px; cursor:pointer;" onclick="selectTarget('bg')">🖼️ Main Background</div>`;
   }
+  cp.props.forEach(p => {
+    list.innerHTML += `<div style="padding:4px; cursor:pointer;" onclick="selectTarget('${p.id}')">📦 ${p.name}</div>`;
+  });
+}
 
-  .btn {
-    padding: 7px 12px;
-    font-size: 12px;
-    font-weight: 600;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: 0.2s;
-  }
-  .btn-green { background: #39ff14; color: #000; }
-  .btn-green:hover { background: #51ff33; box-shadow: 0 0 12px rgba(57, 255, 20, 0.4); }
-  .btn-gray { background: #1c2336; color: #cbd5e1; }
-  .btn-gray:hover { background: #26314c; }
-  .btn-active { background: #0284c7; color: #fff; }
-  .btn-red { background: #ef4444; color: #fff; }
+function triggerFlash(col, a) { cam.flashColor = col; cam.flashAlpha = a; }
+function triggerShake(amt, d) { cam.shakeIntensity = amt; cam.shakeDuration = d; }
 
-  .file-input-btn {
-    display: block;
-    width: 100%;
-    text-align: center;
-    padding: 7px;
-    background: #1c2336;
-    border: 1px dashed #344263;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 12px;
-    color: #38bdf8;
-    margin-top: 6px;
-  }
-  .file-input-btn:hover { background: #242e47; border-color: #38bdf8; }
-  .file-input-btn input { display: none; }
+// =========================================================================
+// --- FRAME STUDIO (Operating on Current Isolated Phase) ---
+// =========================================================================
 
-  /* Viewport */
-  #viewport-area {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    position: relative;
-    background: #06070b;
-  }
+const POSE_KEYS = [
+  { key: 'idle', label: 'IDLE' },
+  { key: 'singUP', label: 'UP' },
+  { key: 'singDOWN', label: 'DOWN' },
+  { key: 'singLEFT', label: 'LEFT' },
+  { key: 'singRIGHT', label: 'RIGHT' }
+];
 
-  #top-bar {
-    height: 48px;
-    background: #111420;
-    border-bottom: 1px solid #1a2336;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 16px;
-  }
-  .top-btn-group { display: flex; gap: 8px; align-items: center; }
+let selectedFrameInfo = null;
 
-  #stage-canvas-container {
-    flex: 1;
-    position: relative;
-    overflow: hidden;
-  }
-  canvas { display: block; width: 100%; height: 100%; }
+function openFrameStudio() {
+  const t = getActiveTarget();
+  document.getElementById('studio-character-title').textContent = `${t.name} (${getCurPhase().name})`;
+  document.getElementById('studio-fps-input').value = t.fps || 12;
+  renderPosesGrid();
+  document.getElementById('frame-studio-modal').style.display = 'flex';
+}
 
-  #status-info {
-    position: absolute;
-    bottom: 12px;
-    left: 12px;
-    font-family: monospace;
-    font-size: 12px;
-    background: rgba(10, 13, 22, 0.85);
-    padding: 6px 10px;
-    border-radius: 6px;
-    border: 1px solid #20293d;
-    pointer-events: none;
-  }
+function closeFrameStudio() {
+  document.getElementById('frame-studio-modal').style.display = 'none';
+  selectedFrameInfo = null;
+  document.getElementById('frame-inspector').style.display = 'none';
+}
 
-  /* --- Frame Animation Studio Modal --- */
-  #frame-studio-modal {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(7, 9, 15, 0.94);
-    z-index: 1000;
-    flex-direction: column;
-    padding: 24px;
-    backdrop-filter: blur(4px);
-  }
+function updateFPS(val) {
+  const t = getActiveTarget();
+  if (t) t.fps = Math.max(1, parseInt(val) || 12);
+}
 
-  .studio-modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 2px solid #232d42;
-    padding-bottom: 12px;
-    margin-bottom: 16px;
-  }
-  .studio-modal-header h2 {
-    font-size: 20px;
-    font-style: italic;
-    color: #39ff14;
-    text-transform: uppercase;
-  }
+function renderPosesGrid() {
+  const grid = document.getElementById('poses-grid-container');
+  grid.innerHTML = '';
+  const t = getActiveTarget();
 
-  /* Animation Frame Grid (Matching Mockup) */
-  .grid-container {
-    flex: 1;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    padding-right: 8px;
-  }
+  POSE_KEYS.forEach(p => {
+    const frames = t.poses[p.key] || [];
+    const row = document.createElement('div');
+    row.className = 'pose-row';
 
-  .pose-row {
-    background: #111522;
-    border: 3px solid #000;
-    border-radius: 6px;
-    display: flex;
-    align-items: stretch;
-    min-height: 120px;
-    overflow-x: auto;
-  }
+    const labelCell = document.createElement('div');
+    labelCell.className = 'pose-label-cell';
+    labelCell.innerHTML = `<h4>${p.label}</h4><small style="color:#64748b;">${frames.length} frame(s)</small>`;
+    row.appendChild(labelCell);
 
-  .pose-label-cell {
-    width: 140px;
-    min-width: 140px;
-    background: #181f33;
-    border-right: 3px solid #000;
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-  }
-  .pose-label-cell h4 {
-    font-size: 18px;
-    font-style: italic;
-    color: #cbd5e1;
-  }
+    const strip = document.createElement('div');
+    strip.className = 'frames-strip';
 
-  .frames-strip {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 16px;
-    flex: 1;
-  }
+    const addCell = document.createElement('div');
+    addCell.className = 'add-frame-cell';
+    addCell.innerHTML = `+ Add<br>Frame`;
+    addCell.onclick = () => triggerUploadFrame(p.key);
+    strip.appendChild(addCell);
 
-  .frame-cell {
-    width: 95px;
-    height: 95px;
-    min-width: 95px;
-    background: #1b2136;
-    border: 3px solid #000;
-    border-radius: 4px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    cursor: pointer;
-    transition: 0.15s;
-  }
-  .frame-cell:hover {
-    border-color: #39ff14;
-    transform: translateY(-2px);
-  }
-  .frame-cell.selected {
-    border-color: #38bdf8;
-    box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
-  }
+    frames.forEach((f, idx) => {
+      const fCell = document.createElement('div');
+      fCell.className = `frame-cell ${selectedFrameInfo && selectedFrameInfo.poseKey === p.key && selectedFrameInfo.frameIndex === idx ? 'selected' : ''}`;
+      const imgElem = document.createElement('img');
+      imgElem.src = f.img.src;
+      fCell.appendChild(imgElem);
+      const numSpan = document.createElement('span');
+      numSpan.textContent = `FRAME ${idx + 1}`;
+      fCell.appendChild(numSpan);
+      fCell.onclick = () => selectFrame(p.key, idx);
+      strip.appendChild(fCell);
+    });
 
-  .frame-cell img {
-    max-width: 80%;
-    max-height: 70%;
-    object-fit: contain;
-  }
-  .frame-cell span {
-    position: absolute;
-    bottom: 2px;
-    font-size: 10px;
-    font-family: monospace;
-    color: #94a3b8;
-  }
+    row.appendChild(strip);
+    grid.appendChild(row);
+  });
+}
 
-  .add-frame-cell {
-    width: 95px;
-    height: 95px;
-    min-width: 95px;
-    background: #131726;
-    border: 3px dashed #303d5c;
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    font-weight: bold;
-    color: #38bdf8;
-    cursor: pointer;
-    text-align: center;
-    padding: 8px;
-  }
-  .add-frame-cell:hover {
-    background: #192036;
-    border-color: #38bdf8;
-  }
+function triggerUploadFrame(poseKey) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const img = new Image();
+    img.src = URL.createObjectURL(file);
+    img.onload = () => {
+      const t = getActiveTarget();
+      t.poses[poseKey].push({ img: img, w: t.width, h: t.height, ox: 0, oy: 0 });
+      renderPosesGrid();
+    };
+  };
+  input.click();
+}
 
-  /* Sub-inspector for selected frame */
-  #frame-inspector {
-    display: none;
-    background: #141926;
-    border: 2px solid #2c3852;
-    border-radius: 8px;
-    padding: 12px 18px;
-    margin-top: 12px;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-  }
+function selectFrame(poseKey, idx) {
+  selectedFrameInfo = { poseKey, frameIndex: idx };
+  renderPosesGrid();
+  const t = getActiveTarget();
+  const f = t.poses[poseKey][idx];
+  document.getElementById('frame-inspector').style.display = 'flex';
+  document.getElementById('lbl-insp-pose').textContent = poseKey.toUpperCase();
+  document.getElementById('lbl-insp-idx').textContent = idx + 1;
+  document.getElementById('insp-frame-w').value = f.w;
+  document.getElementById('insp-frame-h').value = f.h;
+  document.getElementById('insp-frame-ox').value = f.ox;
+  document.getElementById('insp-frame-oy').value = f.oy;
+}
 
-  /* Spritesheet Slicer Popup */
-  #slicer-modal {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.85);
-    z-index: 1100;
-    align-items: center;
-    justify-content: center;
-  }
-  .slicer-card {
-    background: #131826;
-    border: 2px solid #39ff14;
-    border-radius: 10px;
-    padding: 20px;
-    width: 440px;
-    max-width: 90vw;
-  }
-</style>
-</head>
-<body>
+function updateFrameDimensions() {
+  if (!selectedFrameInfo) return;
+  const t = getActiveTarget();
+  const f = t.poses[selectedFrameInfo.poseKey][selectedFrameInfo.frameIndex];
+  f.w = parseInt(document.getElementById('insp-frame-w').value) || t.width;
+  f.h = parseInt(document.getElementById('insp-frame-h').value) || t.height;
+  f.ox = parseInt(document.getElementById('insp-frame-ox').value) || 0;
+  f.oy = parseInt(document.getElementById('insp-frame-oy').value) || 0;
+}
 
-<!-- Left Inspector Sidebar -->
-<aside id="sidebar">
-  <div class="sidebar-header">
-    <h2>FNF MOD STUDIO</h2>
-  </div>
+function replaceSelectedFrame(evt) {
+  const file = evt.target.files[0];
+  if (!file || !selectedFrameInfo) return;
+  const img = new Image();
+  img.src = URL.createObjectURL(file);
+  img.onload = () => {
+    const t = getActiveTarget();
+    t.poses[selectedFrameInfo.poseKey][selectedFrameInfo.frameIndex].img = img;
+    renderPosesGrid();
+  };
+}
 
-  <div class="tab-buttons">
-    <button class="tab-btn active" onclick="switchTab('character')">Characters</button>
-    <button class="tab-btn" onclick="switchTab('stage')">Props / Stage</button>
-    <button class="tab-btn" onclick="switchTab('events')">Events</button>
-  </div>
+function deleteSelectedFrame() {
+  if (!selectedFrameInfo) return;
+  getActiveTarget().poses[selectedFrameInfo.poseKey].splice(selectedFrameInfo.frameIndex, 1);
+  selectedFrameInfo = null;
+  document.getElementById('frame-inspector').style.display = 'none';
+  renderPosesGrid();
+}
 
-  <!-- Character Panel -->
-  <div class="panel-content" id="tab-character">
-    <div class="panel-group">
-      <h3>Active Target</h3>
-      <div class="control-row">
-        <label>Selected:</label>
-        <select id="char-select" onchange="selectTarget(this.value)">
-          <option value="bf">Boyfriend</option>
-          <option value="dad">Opponent (Lime)</option>
-          <option value="gf">Girlfriend</option>
-        </select>
-      </div>
-      <div class="control-row">
-        <label>Flip X (Mirror):</label>
-        <input type="checkbox" id="char-flip" onchange="updateSelectedTransform()">
-      </div>
-    </div>
+// =========================================================================
+// --- SPRITESHEET SLICER ---
+// =========================================================================
 
-    <!-- Frame Studio Launcher -->
-    <div class="panel-group">
-      <h3>Animation Frames</h3>
-      <p style="font-size:11px; color:#94a3b8; margin-bottom:8px;">Add multi-frame poses or slice a sprite sheet.</p>
-      <button class="btn btn-green" style="width:100%; padding:10px;" onclick="openFrameStudio()">
-        🎬 Open Frame Grid Editor
-      </button>
-    </div>
-
-    <div class="panel-group">
-      <h3>Test Poses</h3>
-      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;">
-        <button class="btn btn-gray" onclick="triggerPose('idle')">Idle</button>
-        <button class="btn btn-gray" onclick="triggerPose('singLEFT')">Left</button>
-        <button class="btn btn-gray" onclick="triggerPose('singDOWN')">Down</button>
-        <button class="btn btn-gray" onclick="triggerPose('singUP')">Up</button>
-        <button class="btn btn-gray" onclick="triggerPose('singRIGHT')">Right</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Stage Panel -->
-  <div class="panel-content" id="tab-stage" style="display:none;">
-    <div class="panel-group">
-      <h3>Background & Props</h3>
-      <label class="file-input-btn">Upload Main Background
-        <input type="file" accept="image/*" onchange="loadBackground(event)">
-      </label>
-      <label class="file-input-btn">+ Add Custom Stage Prop
-        <input type="file" accept="image/*" onchange="addProp(event)">
-      </label>
-    </div>
-    <div class="panel-group">
-      <h3>Layers & Objects</h3>
-      <div id="props-list" style="font-size:12px; display:flex; flex-direction:column; gap:4px;"></div>
-    </div>
-  </div>
-
-  <!-- Events Panel -->
-  <div class="panel-content" id="tab-events" style="display:none;">
-    <div class="panel-group">
-      <h3>Screen Effects</h3>
-      <div style="display:flex; flex-direction:column; gap:8px;">
-        <button class="btn btn-red" onclick="triggerFlash('#ff1744', 0.6)">🚨 Reactor Red Flash</button>
-        <button class="btn btn-gray" onclick="triggerFlash('#ffffff', 0.8)">⚡ White Flash</button>
-        <button class="btn btn-gray" onclick="triggerShake(16, 0.4)">📳 Screen Shake</button>
-      </div>
-    </div>
-  </div>
-</aside>
-
-<!-- Viewport -->
-<main id="viewport-area">
-  <div id="top-bar">
-    <div class="top-btn-group">
-      <span style="font-size:12px; color:#94a3b8;">Tools:</span>
-      <button class="btn btn-active" id="btn-mode-move" onclick="setToolMode('move')">Move Mode</button>
-      <button class="btn btn-gray" id="btn-mode-resize" onclick="setToolMode('resize')">⤢ Resizer Mode (4 Sides)</button>
-      <button class="btn btn-gray" id="btn-mode-cam" onclick="setToolMode('cam')">Camera Test</button>
-    </div>
-    <div class="top-btn-group">
-      <button class="btn btn-green" onclick="exportProject()">Export Project</button>
-    </div>
-  </div>
-
-  <div id="stage-canvas-container">
-    <canvas id="stageCanvas"></canvas>
-    <div id="status-info">Selected: <span id="lbl-selected" style="color:#39ff14">bf</span> | Mode: <span id="lbl-mode" style="color:#38bdf8">move</span></div>
-  </div>
-</main>
-
-<!-- FRAME ANIMATION STUDIO MODAL (Mockup Implementation) -->
-<div id="frame-studio-modal">
-  <div class="studio-modal-header">
-    <h2 id="studio-character-title">Editing Character</h2>
-    <div style="display:flex; gap:10px; align-items:center;">
-      <label style="font-size:13px; color:#94a3b8;">Playback FPS:
-        <input type="number" id="studio-fps-input" value="12" min="1" max="60" style="width:55px; background:#0d101a; border:1px solid #303d5c; color:#fff; border-radius:4px; padding:3px;" onchange="updateFPS(this.value)">
-      </label>
-      <button class="btn btn-gray" onclick="openSlicerModal()">📐 Import Sprite Sheet (Grid)</button>
-      <button class="btn btn-green" onclick="closeFrameStudio()">Done / Back to Stage</button>
-    </div>
-  </div>
-
-  <!-- Rows Grid -->
-  <div class="grid-container" id="poses-grid-container">
-    <!-- Rows dynamically generated: IDLE, UP, DOWN, LEFT, RIGHT -->
-  </div>
-
-  <!-- Frame Inspector (Edit/Replace/Resize Selected Frame) -->
-  <div id="frame-inspector">
-    <div style="font-size:13px; font-weight:600; color:#38bdf8;">
-      Selected: <span id="lbl-insp-pose">IDLE</span> - Frame <span id="lbl-insp-idx">1</span>
-    </div>
-    <div style="display:flex; gap:12px; align-items:center; font-size:12px;">
-      <label>Width: <input type="number" id="insp-frame-w" style="width:65px;" onchange="updateFrameDimensions()"></label>
-      <label>Height: <input type="number" id="insp-frame-h" style="width:65px;" onchange="updateFrameDimensions()"></label>
-      <label>Offset X: <input type="number" id="insp-frame-ox" style="width:55px;" onchange="updateFrameDimensions()"></label>
-      <label>Offset Y: <input type="number" id="insp-frame-oy" style="width:55px;" onchange="updateFrameDimensions()"></label>
-      <label class="btn btn-gray" style="cursor:pointer;">
-        Replace Image <input type="file" accept="image/*" style="display:none;" onchange="replaceSelectedFrame(event)">
-      </label>
-      <button class="btn btn-red" onclick="deleteSelectedFrame()">Delete Frame</button>
-    </div>
-  </div>
-</div>
-
-<!-- SPRITESHEET SLICER POPUP -->
-<div id="slicer-modal">
-  <div class="slicer-card">
-    <h3 style="margin-bottom:12px; color:#39ff14;">Upload & Slice Sprite Sheet</h3>
-    <p style="font-size:12px; color:#94a3b8; margin-bottom:14px;">Select an image and specify the grid dimensions to extract frames automatically.</p>
-    
-    <label class="file-input-btn" style="margin-bottom:14px;">
-      Select Sprite Sheet (.png)
-      <input type="file" id="slicer-file-input" accept="image/*" onchange="previewSlicerImage(event)">
-    </label>
-
-    <div style="display:flex; gap:12px; margin-bottom:14px; font-size:13px;">
-      <label style="flex:1;">Rows: <input type="number" id="slicer-rows" value="2" min="1" max="20" style="width:100%; margin-top:4px; padding:6px; background:#0d101a; border:1px solid #28334a; color:#fff; border-radius:4px;"></label>
-      <label style="flex:1;">Columns: <input type="number" id="slicer-cols" value="4" min="1" max="20" style="width:100%; margin-top:4px; padding:6px; background:#0d101a; border:1px solid #28334a; color:#fff; border-radius:4px;"></label>
-    </div>
-
-    <div style="margin-bottom:16px; font-size:13px;">
-      <label>Target Pose:
-        <select id="slicer-target-pose" style="width:100%; margin-top:4px; padding:6px; background:#0d101a; border:1px solid #28334a; color:#39ff14; border-radius:4px;">
-          <option value="idle">IDLE</option>
-          <option value="singUP">UP</option>
-          <option value="singDOWN">DOWN</option>
-          <option value="singLEFT">LEFT</option>
-          <option value="singRIGHT">RIGHT</option>
-        </select>
-      </label>
-    </div>
-
-    <div style="display:flex; justify-content:flex-end; gap:8px;">
-      <button class="btn btn-gray" onclick="closeSlicerModal()">Cancel</button>
-      <button class="btn btn-green" onclick="processSlices()">Slice & Add Frames</button>
-    </div>
-  </div>
-</div>
-
-<script src="studio.js"></script>
-</body>
-</html>
+let rawSlicerImg = null;
+function openSlicerModal() { document.getElementById('slicer-modal').style.display = 'flex'; }
+function closeSlicerModal() { document.getElementById('slic
