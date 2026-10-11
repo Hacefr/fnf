@@ -1,4 +1,4 @@
-// --- engine.js: Core Canvas, Smart Camera (Duet-Zoom), Audio & V-Slice Mobile Controls ---
+// --- engine.js: Core Canvas, Section-Based Smart Camera, Holds (Sustains), & Audio ---
 const canvas = document.getElementById('stageCanvas');
 const ctx = canvas.getContext('2d');
 const container = document.getElementById('stage-canvas-container');
@@ -11,7 +11,6 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 window.addEventListener('load', resizeCanvas);
 
-// Global Configuration
 const gameConfig = {
   downscroll: false,
   mobileTouch: false,
@@ -29,7 +28,7 @@ function updateScrollSpeed(val) {
   document.getElementById('lbl-scroll-speed').textContent = `${gameConfig.scrollSpeed.toFixed(1)}x`;
 }
 
-// Camera System (Smart Duet Zoom & Bop)
+// Camera System
 const cam = {
   x: 0, y: 0,
   targetX: 0, targetY: 0,
@@ -49,6 +48,7 @@ let rawAudioFiles = { inst: null, voices: null, chart: null };
 
 let chartData = null;
 let parsedNotes = [];
+let chartSections = []; // [{ startTime, endTime, mustHitSection }]
 let bpm = 150;
 let songSpeed = 2.6;
 let songDuration = 120000;
@@ -64,7 +64,6 @@ const ARROW_COLORS = ['#C24B99', '#00FFFF', '#12FA05', '#F9393F'];
 const playerReceptors = [0, 0, 0, 0];
 const receptorGlowTimer = [0, 0, 0, 0];
 
-// Screen <-> World Space Coordinates
 function screenToWorld(sx, sy) {
   const cx = canvas.width / 2;
   const cy = canvas.height / 2;
@@ -74,7 +73,7 @@ function screenToWorld(sx, sy) {
   };
 }
 
-// V-Slice Mobile Touch Controls with Smooth Drag-Across
+// V-Slice Mobile Touch Controls
 function toggleMobileTouchLayer(enabled) {
   gameConfig.mobileTouch = enabled;
   document.getElementById('mobile-touch-layer').style.display = enabled ? 'block' : 'none';
@@ -134,6 +133,7 @@ function triggerPlayerLaneHit(lane) {
   const bf = getCurPhase().characters.bf;
   bf.currentPose = dirPoses[lane];
   bf.animTimer = 0;
+  bf.holdTimer = 0.35; // Hold pose cleanly
 }
 
 const KEY_MAP = {
@@ -154,7 +154,7 @@ window.addEventListener('keyup', (e) => {
   if (lane !== undefined) playerReceptors[lane] = 0;
 });
 
-// Audio Track Loaders
+// Audio & Chart Loaders
 async function initAudioContext() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (audioCtx.state === 'suspended') await audioCtx.resume();
@@ -206,10 +206,24 @@ function processChartData(data) {
   document.getElementById('lbl-scroll-speed').textContent = `${songSpeed.toFixed(1)}x`;
 
   parsedNotes = [];
+  chartSections = [];
   const isNMV = song.format === 'nmv2' || song.lanes !== undefined || Boolean(song.format);
 
+  let currentSecTime = 0;
+
   (song.notes || []).forEach(sec => {
-    const mustHit = sec.mustHitSection;
+    const mustHit = !!sec.mustHitSection;
+    const secBpm = sec.bpm || bpm;
+    const secBeats = sec.sectionBeats || 4;
+    const secDuration = (secBeats * (60 / secBpm)) * 1000;
+
+    chartSections.push({
+      startTime: currentSecTime,
+      endTime: currentSecTime + secDuration,
+      mustHitSection: mustHit
+    });
+    currentSecTime += secDuration;
+
     (sec.sectionNotes || []).forEach(n => {
       const strumTime = n[0];
       const rawDir = n[1];
@@ -275,7 +289,32 @@ function stopAudioSources() {
 function triggerFlash(col, a) { cam.flashColor = col; cam.flashAlpha = a; }
 function triggerShake(amt, d) { cam.shakeIntensity = amt; cam.shakeDuration = d; }
 
-// --- Arrow & Strumline Renderer ---
+// --- Hold (Sustain) Trail Renderer ---
+function drawSustainTrail(ctx, noteX, startY, endY, dir) {
+  const trailWidth = 14;
+  const topY = Math.min(startY, endY);
+  const height = Math.abs(endY - startY);
+
+  if (height <= 1) return;
+
+  ctx.save();
+  ctx.fillStyle = ARROW_COLORS[dir] + '88';
+  ctx.strokeStyle = ARROW_COLORS[dir];
+  ctx.lineWidth = 2;
+
+  ctx.fillRect(noteX - trailWidth / 2, topY, trailWidth, height);
+  ctx.strokeRect(noteX - trailWidth / 2, topY, trailWidth, height);
+
+  // Rounded end cap
+  ctx.beginPath();
+  ctx.arc(noteX, endY, trailWidth / 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+// --- Strumline & Note Renderer with Holds ---
 function drawStrumlinesAndNotes(ctx) {
   const downscroll = gameConfig.downscroll;
   const isMobile = gameConfig.mobileTouch;
@@ -283,19 +322,19 @@ function drawStrumlinesAndNotes(ctx) {
   const size = 19;
   const scrollFactor = 0.45 * gameConfig.scrollSpeed;
 
-  // Dad Receptors (Left side: fixed at top)
+  // Dad Receptors (Left side)
   const dadY = downscroll ? (canvas.height - 75) : 60;
   for (let i = 0; i < 4; i++) {
     drawMiniArrow(ctx, 40 + i * spacing, dadY, size, i, ARROW_COLORS[i], 'stroke');
   }
 
-  // BF Receptors: If mobile touch is active, snap directly over the mobile touch buttons!
+  // BF Receptors (Right side, or above mobile buttons)
   let bfY, bfStartX;
   if (isMobile) {
     const hitboxCont = document.querySelector('.touch-hitbox-container');
     const rect = hitboxCont.getBoundingClientRect();
     const cRect = canvas.getBoundingClientRect();
-    bfY = (rect.top - cRect.top) - 25; // Directly above touch hitboxes
+    bfY = (rect.top - cRect.top) - 25;
     bfStartX = (rect.left - cRect.left) + 20;
   } else {
     bfY = downscroll ? (canvas.height - 75) : 60;
@@ -308,11 +347,35 @@ function drawStrumlinesAndNotes(ctx) {
     drawMiniArrow(ctx, rx, bfY, size, i, ARROW_COLORS[i], style);
   }
 
-  // Render scrolling notes
+  // Render Holds (Sustains) and Scrolling Notes
   if (isPlaying && parsedNotes.length > 0) {
+    // 1. Draw Sustain Trails first (so note heads draw on top)
+    parsedNotes.forEach(n => {
+      if (n.sustain <= 0) return;
+      const noteEndTime = n.time + n.sustain;
+      if (currentTime > noteEndTime || n.time - currentTime > 1200) return;
+
+      const noteX = n.isPlayer 
+        ? (bfStartX + n.dir * (isMobile ? (spacing * 1.5) : spacing))
+        : (40 + n.dir * spacing);
+      const targetStrumY = n.isPlayer ? bfY : dadY;
+
+      // Calculate start and end Y of the sustain trail
+      let startY = downscroll ? (targetStrumY - (n.time - currentTime) * scrollFactor) : (targetStrumY + (n.time - currentTime) * scrollFactor);
+      let endY = downscroll ? (targetStrumY - (noteEndTime - currentTime) * scrollFactor) : (targetStrumY + (noteEndTime - currentTime) * scrollFactor);
+
+      // Clamp sustain trail to receptor while holding
+      if (currentTime >= n.time) {
+        startY = targetStrumY;
+      }
+
+      drawSustainTrail(ctx, noteX, startY, endY, n.dir);
+    });
+
+    // 2. Draw Note Heads
     parsedNotes.forEach(n => {
       const timeDiff = n.time - currentTime;
-      if (timeDiff < -200 || timeDiff > 1200) return;
+      if (timeDiff < -180 || timeDiff > 1200) return;
 
       const noteX = n.isPlayer 
         ? (bfStartX + n.dir * (isMobile ? (spacing * 1.5) : spacing))
@@ -372,7 +435,9 @@ function drawHealthBarWithIcons(ctx, phase) {
   ctx.lineWidth = 3;
   ctx.strokeRect(barX, barY, barW, barH);
 
-  const iconBounce = Math.max(1.0, 1.0 + (cam.zoom - cam.targetZoom) * 1.2);
+  // Exact beat icon progress bounce
+  const beatProgress = (currentTime % ((60 / bpm) * 1000)) / ((60 / bpm) * 1000);
+  const iconBounce = 1.0 + Math.max(0, 0.16 * (1.0 - beatProgress * 2.5));
   const iconSize = 40 * iconBounce;
 
   const dadIcon = phase.icons?.dad?.neutral;
@@ -391,7 +456,7 @@ let lastTime = performance.now();
 
 function render() {
   const now = performance.now();
-  const dt = (now - lastTime) / 1000;
+  const dt = Math.min(0.1, (now - lastTime) / 1000); // Clamped delta time
   lastTime = now;
 
   if (canvas.width <= 0 || canvas.height <= 0) resizeCanvas();
@@ -413,7 +478,7 @@ function render() {
     const curTimeLbl = document.getElementById('lbl-current-time');
     if (curTimeLbl) curTimeLbl.textContent = formatTime(currentTime);
 
-    // Transitions
+    // Timeline Events
     timelineEvents.forEach(ev => {
       if (!ev.triggered && Math.abs(currentTime - ev.time) <= 120) {
         ev.triggered = true;
@@ -421,15 +486,16 @@ function render() {
       }
     });
 
-    // Notes sing trigger
-    const curSingNote = parsedNotes.find(n => Math.abs(n.time - currentTime) <= 80);
-    if (curSingNote) {
-      const charKey = curSingNote.isPlayer ? 'bf' : 'dad';
+    // Character Sing Pose Trigger & Hold Timer Setup
+    const curSingNotes = parsedNotes.filter(n => Math.abs(n.time - currentTime) <= 80);
+    curSingNotes.forEach(n => {
+      const charKey = n.isPlayer ? 'bf' : 'dad';
       const dirPoses = ['singLEFT', 'singDOWN', 'singUP', 'singRIGHT'];
       const targetChar = getCurPhase().characters[charKey];
-      targetChar.currentPose = dirPoses[curSingNote.dir];
+      targetChar.currentPose = dirPoses[n.dir];
       targetChar.animTimer = 0;
-    }
+      targetChar.holdTimer = Math.max(0.35, (n.sustain / 1000) + 0.08); // Lock in singing pose
+    });
   }
 
   for (let i = 0; i < 4; i++) {
@@ -454,47 +520,55 @@ function render() {
       const ch = cp.characters[cid];
       if (curBeat % ch.danceFreq === 0) {
         ch.bounceScale = 1.0 + ch.bouncePow;
-        if (!ch.currentPose.startsWith('sing')) ch.animTimer = 0;
+        // Only return to idle if not currently singing
+        if (ch.holdTimer <= 0) {
+          ch.currentPose = 'idle';
+          ch.animTimer = 0;
+        }
       }
     });
   }
 
-  // Smart Camera Duet Tracking (Zoom Out if Both Sing, Midpoint Pan)
+  // --- Real FNF Section-Based Camera Tracking ---
   const cp = getCurPhase();
   if (cam.smartTracking && toolMode !== 'cam') {
-    const dadSinging = parsedNotes.some(n => !n.isPlayer && Math.abs(n.time - currentTime) <= 220);
-    const bfSinging = parsedNotes.some(n => n.isPlayer && Math.abs(n.time - currentTime) <= 220);
+    const activeSec = chartSections.find(s => currentTime >= s.startTime && currentTime < s.endTime);
+    const dadSinging = parsedNotes.some(n => !n.isPlayer && Math.abs(n.time - currentTime) <= 200);
+    const bfSinging = parsedNotes.some(n => n.isPlayer && Math.abs(n.time - currentTime) <= 200);
 
     if (dadSinging && bfSinging) {
-      // Duet! Pan to center between them and zoom out
+      // Duet: Zoom out and focus between characters
       cam.targetX = (cp.characters.dad.x + cp.characters.bf.x) / 2;
       cam.targetY = ((cp.characters.dad.y + cp.characters.bf.y) / 2) - 20;
       cam.targetZoom = cam.baseZoom * 0.82;
+    } else if (activeSec) {
+      // Focus stays locked on whoever's turn it is for the entire section
+      if (activeSec.mustHitSection) {
+        cam.targetX = cp.characters.bf.x;
+        cam.targetY = cp.characters.bf.y - 20;
+      } else {
+        cam.targetX = cp.characters.dad.x;
+        cam.targetY = cp.characters.dad.y - 20;
+      }
+      cam.targetZoom = cam.baseZoom;
     } else if (dadSinging) {
       cam.targetX = cp.characters.dad.x;
       cam.targetY = cp.characters.dad.y - 20;
-      cam.targetZoom = cam.baseZoom;
     } else if (bfSinging) {
       cam.targetX = cp.characters.bf.x;
       cam.targetY = cp.characters.bf.y - 20;
-      cam.targetZoom = cam.baseZoom;
-    } else {
-      cam.targetX = 0;
-      cam.targetY = 0;
-      cam.targetZoom = cam.baseZoom;
     }
   } else if (toolMode === 'cam') {
     const target = getActiveTarget();
     cam.targetX = target.x;
     cam.targetY = target.y - 20;
-  } else {
-    cam.targetX = 0;
-    cam.targetY = 0;
   }
 
-  cam.x += (cam.targetX - cam.x) * 0.08;
-  cam.y += (cam.targetY - cam.y) * 0.08;
-  cam.zoom += (cam.targetZoom - cam.zoom) * 0.08;
+  // Continuous Exponential Lerp (Frame-Rate Independent)
+  const lerpRate = 1 - Math.exp(-4.5 * dt);
+  cam.x += (cam.targetX - cam.x) * lerpRate;
+  cam.y += (cam.targetY - cam.y) * lerpRate;
+  cam.zoom += (cam.targetZoom - cam.zoom) * (1 - Math.exp(-7.0 * dt));
 
   let shakeX = 0, shakeY = 0;
   if (cam.shakeDuration > 0) {
@@ -503,7 +577,6 @@ function render() {
     shakeY = (Math.random() - 0.5) * cam.shakeIntensity * 2;
   }
 
-  // Clear Canvas
   ctx.fillStyle = '#06070a';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -521,11 +594,21 @@ function render() {
     if (p.img) ctx.drawImage(p.img, p.x - p.width / 2, p.y - p.height / 2, p.width, p.height);
   });
 
-  // Characters (Only clean placeholders, NO fake ground/speakers!)
+  // Characters (No fake ground/speakers drawn!)
   ['gf', 'dad', 'bf'].forEach(id => {
     const c = cp.characters[id];
     c.animTimer = (c.animTimer || 0) + dt;
-    c.bounceScale += (1.0 - c.bounceScale) * 0.12;
+
+    // Decay sing hold timer
+    if (c.holdTimer > 0) {
+      c.holdTimer -= dt;
+      if (c.holdTimer <= 0) {
+        c.currentPose = 'idle';
+        c.animTimer = 0;
+      }
+    }
+
+    c.bounceScale += (1.0 - c.bounceScale) * (1 - Math.exp(-12 * dt));
 
     const frames = c.poses[c.currentPose] && c.poses[c.currentPose].length > 0 
       ? c.poses[c.currentPose] 
@@ -622,11 +705,11 @@ function render() {
     }
   }
 
-  // LAYER 3: Gameplay UI (Strumlines & Health Bar)
+  // LAYER 3: Gameplay UI (Strumlines, Holds, Health Bar)
   drawStrumlinesAndNotes(ctx);
   drawHealthBarWithIcons(ctx, cp);
 
-  // LAYER 4: Cinematic Blackout (Hide Everything)
+  // LAYER 4: Cinematic Blackout (Hide All)
   if (activeTransition && activeTransition.uiMode === 'hide_all') {
     ctx.fillStyle = '#000000';
     ctx.globalAlpha = Math.min(1, Math.max(0, blackAlpha));
