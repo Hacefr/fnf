@@ -17,7 +17,7 @@
 
   /* Left Inspector Sidebar */
   #sidebar {
-    width: 330px;
+    width: 340px;
     background: #111420;
     border-right: 2px solid #1a2336;
     display: flex;
@@ -26,7 +26,7 @@
   }
 
   .sidebar-header {
-    padding: 14px 16px;
+    padding: 12px 16px;
     background: #151a29;
     border-bottom: 1px solid #1f283d;
   }
@@ -64,7 +64,7 @@
     border-radius: 8px;
     padding: 12px;
   }
-  .panel-group h3 { font-size: 12px; color: #cbd5e1; margin-bottom: 8px; text-transform: uppercase; }
+  .panel-group h3 { font-size: 11px; color: #cbd5e1; margin-bottom: 8px; text-transform: uppercase; }
 
   .control-row {
     display: flex;
@@ -74,15 +74,15 @@
     font-size: 12px;
   }
   .control-row label { color: #94a3b8; }
-  .control-row input[type="number"], .control-row select {
+  .control-row input[type="number"], .control-row input[type="range"], .control-row select {
     background: #0d101a;
     border: 1px solid #26334d;
     color: #fff;
     padding: 4px 6px;
     border-radius: 4px;
-    width: 80px;
     font-size: 12px;
   }
+  .control-row input[type="number"] { width: 75px; }
 
   .btn {
     padding: 7px 12px;
@@ -212,90 +212,47 @@
   }
   .timeline-playhead {
     position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background: #38bdf8;
-    pointer-events: none;
+    top: 0; bottom: 0; width: 2px;
+    background: #38bdf8; pointer-events: none;
   }
   .timeline-startpos {
     position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 3px;
-    background: #ffcc00;
-    box-shadow: 0 0 8px #ffcc00;
-    pointer-events: none;
+    top: 0; bottom: 0; width: 3px;
+    background: #ffcc00; box-shadow: 0 0 8px #ffcc00; pointer-events: none;
   }
   .timeline-event-marker {
     position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 4px;
-    background: #ff1744;
-    box-shadow: 0 0 6px #ff1744;
-    pointer-events: none;
+    top: 0; bottom: 0; width: 4px;
+    background: #ff1744; box-shadow: 0 0 6px #ff1744; pointer-events: none;
   }
 
-  /* Frame Studio Modal */
+  /* Frame Studio & Modals */
   #frame-studio-modal {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(7, 9, 15, 0.94);
-    z-index: 1000;
-    flex-direction: column;
-    padding: 24px;
-    backdrop-filter: blur(4px);
+    display: none; position: fixed; inset: 0;
+    background: rgba(7, 9, 15, 0.94); z-index: 1000;
+    flex-direction: column; padding: 24px; backdrop-filter: blur(4px);
   }
   .studio-modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 2px solid #232d42;
-    padding-bottom: 12px;
-    margin-bottom: 16px;
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 2px solid #232d42; padding-bottom: 12px; margin-bottom: 16px;
   }
-  .studio-modal-header h2 {
-    font-size: 20px;
-    font-style: italic;
-    color: #39ff14;
-    text-transform: uppercase;
-  }
-
+  .studio-modal-header h2 { font-size: 20px; font-style: italic; color: #39ff14; text-transform: uppercase; }
   .grid-container {
-    flex: 1;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    padding-right: 8px;
+    flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding-right: 8px;
   }
   .pose-row {
-    background: #111522;
-    border: 3px solid #000;
-    border-radius: 6px;
-    display: flex;
-    align-items: stretch;
-    min-height: 120px;
-    overflow-x: auto;
+    background: #111522; border: 3px solid #000; border-radius: 6px;
+    display: flex; align-items: stretch; min-height: 120px; overflow-x: auto;
   }
   .pose-label-cell {
-    width: 140px;
-    min-width: 140px;
-    background: #181f33;
-    border-right: 3px solid #000;
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
+    width: 140px; min-width: 140px; background: #181f33; border-right: 3px solid #000;
+    padding: 12px; display: flex; flex-direction: column; justify-content: space-between;
   }
   .pose-label-cell h4 { font-size: 18px; font-style: italic; color: #cbd5e1; }
   .frames-strip { display: flex; align-items: center; gap: 12px; padding: 10px 16px; flex: 1; }
   .frame-cell {
-    width: 95px; height: 95px; min-width: 95px;
-    background: #1b2136; border: 3px solid #000; border-radius: 4px;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    width: 95px; height: 95px; min-width: 95px; background: #1b2136; border: 3px solid #000;
+    border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center;
     position: relative; cursor: pointer; transition: 0.15s;
   }
   .frame-cell:hover { border-color: #39ff14; transform: translateY(-2px); }
@@ -303,19 +260,16 @@
   .frame-cell img { max-width: 80%; max-height: 70%; object-fit: contain; }
   .frame-cell span { position: absolute; bottom: 2px; font-size: 10px; font-family: monospace; color: #94a3b8; }
   .add-frame-cell {
-    width: 95px; height: 95px; min-width: 95px;
-    background: #131726; border: 3px dashed #303d5c; border-radius: 4px;
-    display: flex; align-items: center; justify-content: center;
+    width: 95px; height: 95px; min-width: 95px; background: #131726; border: 3px dashed #303d5c;
+    border-radius: 4px; display: flex; align-items: center; justify-content: center;
     font-size: 12px; font-weight: bold; color: #38bdf8; cursor: pointer; text-align: center; padding: 8px;
   }
   .add-frame-cell:hover { background: #192036; border-color: #38bdf8; }
-
   #frame-inspector {
     display: none; background: #141926; border: 2px solid #2c3852; border-radius: 8px;
     padding: 12px 18px; margin-top: 12px; align-items: center; justify-content: space-between; gap: 16px;
   }
 
-  /* Spritesheet Slicer Popup */
   #slicer-modal, #transition-modal {
     display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85);
     z-index: 1100; align-items: center; justify-content: center;
@@ -336,7 +290,9 @@
 
   <div class="tab-buttons">
     <button class="tab-btn active" onclick="switchTab('character')">Characters</button>
-    <button class="tab-btn" onclick="switchTab('stage')">Props / Stage</button>
+    <button class="tab-btn" onclick="switchTab('bop')">Camera & Bop</button>
+    <button class="tab-btn" onclick="switchTab('audio')">Audio / Chart</button>
+    <button class="tab-btn" onclick="switchTab('stage')">Props</button>
     <button class="tab-btn" onclick="switchTab('events')">Events</button>
   </div>
 
@@ -358,19 +314,46 @@
       </div>
     </div>
 
-    <!-- Frame Studio Launcher -->
+    <!-- Idle Dance & Bounce Settings -->
     <div class="panel-group">
-      <h3>Phase-Specific Poses</h3>
-      <p style="font-size:11px; color:#94a3b8; margin-bottom:8px;">
-        Editing sprites for <b id="lbl-phase-name" style="color:#39ff14">Phase 1</b> only.
-      </p>
+      <h3>Idle Dance & Bounce Timing</h3>
+      <div class="control-row">
+        <label>Dance Every:</label>
+        <select id="char-dance-freq" onchange="updateDanceFreq(this.value)">
+          <option value="1">1 Beat (Fast / Hectic)</option>
+          <option value="2" selected>2 Beats (Classic Standard)</option>
+          <option value="4">4 Beats (Slow / Relaxed)</option>
+        </select>
+      </div>
+      <div class="control-row">
+        <label>Bounce Squish Power:</label>
+        <input type="range" id="char-bounce-pow" min="0" max="0.15" step="0.01" value="0.06" oninput="updateBouncePow(this.value)">
+      </div>
+    </div>
+
+    <!-- Phase Winning/Losing Icons -->
+    <div class="panel-group">
+      <h3>Phase Icons (Neutral & Losing)</h3>
+      <p style="font-size:11px; color:#94a3b8; margin-bottom:6px;">Upload icons for <b id="lbl-icon-phase" style="color:#39ff14">Phase 1</b>:</p>
+      <label class="file-input-btn">
+        Upload Neutral / Winning Icon (PNG)
+        <input type="file" accept="image/*" onchange="loadCharacterIcon('neutral', event)">
+      </label>
+      <label class="file-input-btn">
+        Upload Losing Icon (&lt; 20% Health)
+        <input type="file" accept="image/*" onchange="loadCharacterIcon('losing', event)">
+      </label>
+    </div>
+
+    <div class="panel-group">
+      <h3>Animation Frames</h3>
       <button class="btn btn-green" style="width:100%; padding:10px;" onclick="openFrameStudio()">
         🎬 Open Frame Grid Editor
       </button>
     </div>
 
     <div class="panel-group">
-      <h3>Test Current Poses</h3>
+      <h3>Test Poses</h3>
       <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;">
         <button class="btn btn-gray" onclick="triggerPose('idle')">Idle</button>
         <button class="btn btn-gray" onclick="triggerPose('singLEFT')">Left</button>
@@ -381,7 +364,72 @@
     </div>
   </div>
 
-  <!-- Stage Panel -->
+  <!-- Camera & Smart Bop Panel -->
+  <div class="panel-content" id="tab-bop" style="display:none;">
+    <div class="panel-group">
+      <h3>Smart Camera Settings</h3>
+      <div class="control-row">
+        <label>Smart Camera Tracking:</label>
+        <input type="checkbox" id="cam-smart-toggle" checked onchange="cam.smartTracking = this.checked">
+      </div>
+      <div class="control-row">
+        <label>Default Base Zoom:</label>
+        <input type="number" id="cam-base-zoom" step="0.05" value="0.9" oninput="cam.targetZoom = parseFloat(this.value)">
+      </div>
+    </div>
+
+    <div class="panel-group">
+      <h3>Beat Bop Strength & Frequency</h3>
+      <div class="control-row">
+        <label>Bop Strength (Intensity):</label>
+        <input type="range" id="cam-bop-strength" min="0" max="0.12" step="0.005" value="0.04" oninput="cam.bopStrength = parseFloat(this.value)">
+      </div>
+      <div class="control-row">
+        <label>Bop Every:</label>
+        <select id="cam-bop-freq" onchange="cam.bopFreq = parseInt(this.value)">
+          <option value="1">1 Beat (Energetic / Fast)</option>
+          <option value="2">2 Beats</option>
+          <option value="4" selected>4 Beats (Classic FNF Measure)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Audio & Chart Panel -->
+  <div class="panel-content" id="tab-audio" style="display:none;">
+    <div class="panel-group">
+      <h3>Song & Vocals (.ogg)</h3>
+      <label class="file-input-btn">
+        Load Inst.ogg <span id="status-inst" style="color:#39ff14"></span>
+        <input type="file" accept="audio/*" onchange="loadAudioTrack('inst', event)">
+      </label>
+      <label class="file-input-btn">
+        Load Voices.ogg <span id="status-voices" style="color:#39ff14"></span>
+        <input type="file" accept="audio/*" onchange="loadAudioTrack('voices', event)">
+      </label>
+    </div>
+
+    <div class="panel-group">
+      <h3>Chart (.json)</h3>
+      <label class="file-input-btn">
+        Load normal.json <span id="status-chart" style="color:#39ff14"></span>
+        <input type="file" accept=".json" onchange="loadChartJSON(event)">
+      </label>
+      <div id="chart-info" style="font-size:11px; color:#94a3b8; margin-top:8px; line-height:1.6;">
+        No chart loaded yet.
+      </div>
+    </div>
+
+    <div class="panel-group">
+      <h3>Playback Controls</h3>
+      <div style="display:flex; gap:6px;">
+        <button class="btn btn-green" style="flex:1;" id="btn-play-pause" onclick="togglePlayback()">▶ Play</button>
+        <button class="btn btn-gray" style="flex:1;" onclick="stopPlayback()">⏹ Stop</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Props Panel -->
   <div class="panel-content" id="tab-stage" style="display:none;">
     <div class="panel-group">
       <h3>Background & Props</h3>
@@ -429,7 +477,8 @@
       <button class="btn btn-gray" id="btn-mode-cam" onclick="setToolMode('cam')">Camera Test</button>
     </div>
     <div class="top-btn-group">
-      <button class="btn btn-green" onclick="exportProject()">Export Project</button>
+      <button class="btn btn-gray" onclick="exportProjectJSON()">Export JSON</button>
+      <button class="btn btn-green" onclick="exportIMPPackage()">📦 Export .imp Package</button>
     </div>
   </div>
 
