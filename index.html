@@ -84,6 +84,22 @@
     font-size: 12px;
   }
 
+  .btn {
+    padding: 7px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+  .btn-green { background: #39ff14; color: #000; }
+  .btn-green:hover { background: #51ff33; box-shadow: 0 0 12px rgba(57, 255, 20, 0.4); }
+  .btn-gray { background: #1c2336; color: #cbd5e1; }
+  .btn-gray:hover { background: #26314c; }
+  .btn-active { background: #0284c7; color: #fff; }
+  .btn-red { background: #ef4444; color: #fff; }
+
   .file-input-btn {
     display: block;
     width: 100%;
@@ -96,7 +112,6 @@
     font-size: 12px;
     color: #38bdf8;
     margin-top: 6px;
-    transition: 0.2s;
   }
   .file-input-btn:hover { background: #242e47; border-color: #38bdf8; }
   .file-input-btn input { display: none; }
@@ -120,21 +135,6 @@
     padding: 0 16px;
   }
   .top-btn-group { display: flex; gap: 8px; align-items: center; }
-  .btn {
-    padding: 6px 12px;
-    font-size: 12px;
-    font-weight: 600;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: 0.2s;
-  }
-  .btn-green { background: #39ff14; color: #000; }
-  .btn-green:hover { background: #51ff33; box-shadow: 0 0 12px rgba(57, 255, 20, 0.4); }
-  .btn-gray { background: #1c2336; color: #cbd5e1; }
-  .btn-gray:hover { background: #26314c; }
-  .btn-active { background: #0284c7; color: #fff; }
-  .btn-red { background: #ef4444; color: #fff; }
 
   #stage-canvas-container {
     flex: 1;
@@ -155,10 +155,173 @@
     border: 1px solid #20293d;
     pointer-events: none;
   }
+
+  /* --- Frame Animation Studio Modal --- */
+  #frame-studio-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(7, 9, 15, 0.94);
+    z-index: 1000;
+    flex-direction: column;
+    padding: 24px;
+    backdrop-filter: blur(4px);
+  }
+
+  .studio-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid #232d42;
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+  }
+  .studio-modal-header h2 {
+    font-size: 20px;
+    font-style: italic;
+    color: #39ff14;
+    text-transform: uppercase;
+  }
+
+  /* Animation Frame Grid (Matching Mockup) */
+  .grid-container {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding-right: 8px;
+  }
+
+  .pose-row {
+    background: #111522;
+    border: 3px solid #000;
+    border-radius: 6px;
+    display: flex;
+    align-items: stretch;
+    min-height: 120px;
+    overflow-x: auto;
+  }
+
+  .pose-label-cell {
+    width: 140px;
+    min-width: 140px;
+    background: #181f33;
+    border-right: 3px solid #000;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .pose-label-cell h4 {
+    font-size: 18px;
+    font-style: italic;
+    color: #cbd5e1;
+  }
+
+  .frames-strip {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    flex: 1;
+  }
+
+  .frame-cell {
+    width: 95px;
+    height: 95px;
+    min-width: 95px;
+    background: #1b2136;
+    border: 3px solid #000;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    cursor: pointer;
+    transition: 0.15s;
+  }
+  .frame-cell:hover {
+    border-color: #39ff14;
+    transform: translateY(-2px);
+  }
+  .frame-cell.selected {
+    border-color: #38bdf8;
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+  }
+
+  .frame-cell img {
+    max-width: 80%;
+    max-height: 70%;
+    object-fit: contain;
+  }
+  .frame-cell span {
+    position: absolute;
+    bottom: 2px;
+    font-size: 10px;
+    font-family: monospace;
+    color: #94a3b8;
+  }
+
+  .add-frame-cell {
+    width: 95px;
+    height: 95px;
+    min-width: 95px;
+    background: #131726;
+    border: 3px dashed #303d5c;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+    color: #38bdf8;
+    cursor: pointer;
+    text-align: center;
+    padding: 8px;
+  }
+  .add-frame-cell:hover {
+    background: #192036;
+    border-color: #38bdf8;
+  }
+
+  /* Sub-inspector for selected frame */
+  #frame-inspector {
+    display: none;
+    background: #141926;
+    border: 2px solid #2c3852;
+    border-radius: 8px;
+    padding: 12px 18px;
+    margin-top: 12px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  /* Spritesheet Slicer Popup */
+  #slicer-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 1100;
+    align-items: center;
+    justify-content: center;
+  }
+  .slicer-card {
+    background: #131826;
+    border: 2px solid #39ff14;
+    border-radius: 10px;
+    padding: 20px;
+    width: 440px;
+    max-width: 90vw;
+  }
 </style>
 </head>
 <body>
 
+<!-- Left Inspector Sidebar -->
 <aside id="sidebar">
   <div class="sidebar-header">
     <h2>FNF MOD STUDIO</h2>
@@ -188,23 +351,13 @@
       </div>
     </div>
 
+    <!-- Frame Studio Launcher -->
     <div class="panel-group">
-      <h3>Poses (Static Images)</h3>
-      <label class="file-input-btn">Upload Idle Pose
-        <input type="file" accept="image/*" onchange="loadPose('idle', event)">
-      </label>
-      <label class="file-input-btn">Upload Left (◄)
-        <input type="file" accept="image/*" onchange="loadPose('singLEFT', event)">
-      </label>
-      <label class="file-input-btn">Upload Down (▼)
-        <input type="file" accept="image/*" onchange="loadPose('singDOWN', event)">
-      </label>
-      <label class="file-input-btn">Upload Up (▲)
-        <input type="file" accept="image/*" onchange="loadPose('singUP', event)">
-      </label>
-      <label class="file-input-btn">Upload Right (►)
-        <input type="file" accept="image/*" onchange="loadPose('singRIGHT', event)">
-      </label>
+      <h3>Animation Frames</h3>
+      <p style="font-size:11px; color:#94a3b8; margin-bottom:8px;">Add multi-frame poses or slice a sprite sheet.</p>
+      <button class="btn btn-green" style="width:100%; padding:10px;" onclick="openFrameStudio()">
+        🎬 Open Frame Grid Editor
+      </button>
     </div>
 
     <div class="panel-group">
@@ -219,7 +372,7 @@
     </div>
   </div>
 
-  <!-- Stage & Props Panel -->
+  <!-- Stage Panel -->
   <div class="panel-content" id="tab-stage" style="display:none;">
     <div class="panel-group">
       <h3>Background & Props</h3>
@@ -249,6 +402,7 @@
   </div>
 </aside>
 
+<!-- Viewport -->
 <main id="viewport-area">
   <div id="top-bar">
     <div class="top-btn-group">
@@ -267,6 +421,77 @@
     <div id="status-info">Selected: <span id="lbl-selected" style="color:#39ff14">bf</span> | Mode: <span id="lbl-mode" style="color:#38bdf8">move</span></div>
   </div>
 </main>
+
+<!-- FRAME ANIMATION STUDIO MODAL (Mockup Implementation) -->
+<div id="frame-studio-modal">
+  <div class="studio-modal-header">
+    <h2 id="studio-character-title">Editing Character</h2>
+    <div style="display:flex; gap:10px; align-items:center;">
+      <label style="font-size:13px; color:#94a3b8;">Playback FPS:
+        <input type="number" id="studio-fps-input" value="12" min="1" max="60" style="width:55px; background:#0d101a; border:1px solid #303d5c; color:#fff; border-radius:4px; padding:3px;" onchange="updateFPS(this.value)">
+      </label>
+      <button class="btn btn-gray" onclick="openSlicerModal()">📐 Import Sprite Sheet (Grid)</button>
+      <button class="btn btn-green" onclick="closeFrameStudio()">Done / Back to Stage</button>
+    </div>
+  </div>
+
+  <!-- Rows Grid -->
+  <div class="grid-container" id="poses-grid-container">
+    <!-- Rows dynamically generated: IDLE, UP, DOWN, LEFT, RIGHT -->
+  </div>
+
+  <!-- Frame Inspector (Edit/Replace/Resize Selected Frame) -->
+  <div id="frame-inspector">
+    <div style="font-size:13px; font-weight:600; color:#38bdf8;">
+      Selected: <span id="lbl-insp-pose">IDLE</span> - Frame <span id="lbl-insp-idx">1</span>
+    </div>
+    <div style="display:flex; gap:12px; align-items:center; font-size:12px;">
+      <label>Width: <input type="number" id="insp-frame-w" style="width:65px;" onchange="updateFrameDimensions()"></label>
+      <label>Height: <input type="number" id="insp-frame-h" style="width:65px;" onchange="updateFrameDimensions()"></label>
+      <label>Offset X: <input type="number" id="insp-frame-ox" style="width:55px;" onchange="updateFrameDimensions()"></label>
+      <label>Offset Y: <input type="number" id="insp-frame-oy" style="width:55px;" onchange="updateFrameDimensions()"></label>
+      <label class="btn btn-gray" style="cursor:pointer;">
+        Replace Image <input type="file" accept="image/*" style="display:none;" onchange="replaceSelectedFrame(event)">
+      </label>
+      <button class="btn btn-red" onclick="deleteSelectedFrame()">Delete Frame</button>
+    </div>
+  </div>
+</div>
+
+<!-- SPRITESHEET SLICER POPUP -->
+<div id="slicer-modal">
+  <div class="slicer-card">
+    <h3 style="margin-bottom:12px; color:#39ff14;">Upload & Slice Sprite Sheet</h3>
+    <p style="font-size:12px; color:#94a3b8; margin-bottom:14px;">Select an image and specify the grid dimensions to extract frames automatically.</p>
+    
+    <label class="file-input-btn" style="margin-bottom:14px;">
+      Select Sprite Sheet (.png)
+      <input type="file" id="slicer-file-input" accept="image/*" onchange="previewSlicerImage(event)">
+    </label>
+
+    <div style="display:flex; gap:12px; margin-bottom:14px; font-size:13px;">
+      <label style="flex:1;">Rows: <input type="number" id="slicer-rows" value="2" min="1" max="20" style="width:100%; margin-top:4px; padding:6px; background:#0d101a; border:1px solid #28334a; color:#fff; border-radius:4px;"></label>
+      <label style="flex:1;">Columns: <input type="number" id="slicer-cols" value="4" min="1" max="20" style="width:100%; margin-top:4px; padding:6px; background:#0d101a; border:1px solid #28334a; color:#fff; border-radius:4px;"></label>
+    </div>
+
+    <div style="margin-bottom:16px; font-size:13px;">
+      <label>Target Pose:
+        <select id="slicer-target-pose" style="width:100%; margin-top:4px; padding:6px; background:#0d101a; border:1px solid #28334a; color:#39ff14; border-radius:4px;">
+          <option value="idle">IDLE</option>
+          <option value="singUP">UP</option>
+          <option value="singDOWN">DOWN</option>
+          <option value="singLEFT">LEFT</option>
+          <option value="singRIGHT">RIGHT</option>
+        </select>
+      </label>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; gap:8px;">
+      <button class="btn btn-gray" onclick="closeSlicerModal()">Cancel</button>
+      <button class="btn btn-green" onclick="processSlices()">Slice & Add Frames</button>
+    </div>
+  </div>
+</div>
 
 <script src="studio.js"></script>
 </body>
