@@ -5,7 +5,6 @@ let timelineEvents = [];
 let activeTransition = null;
 let transitionOverlayImg = null;
 
-// Timeline Draggable Event Marker State
 let isDraggingEventMarker = false;
 let draggedEventIndex = -1;
 
@@ -38,7 +37,6 @@ function scrubTimeline(e) {
   document.getElementById('playhead').style.left = `${pct * 100}%`;
   document.getElementById('lbl-current-time').textContent = formatTime(currentTime);
 
-  // Safely reset any active transition on scrub
   activeTransition = null;
   cam.flashAlpha = 0;
 
@@ -56,7 +54,6 @@ function renderEventMarkers() {
     m.style.left = `${pct}%`;
     m.title = `Event ${idx + 1}: ${formatTime(ev.time)} (Click & Drag to move)`;
 
-    // Mouse drag support to reposition event on timeline
     m.addEventListener('mousedown', (e) => {
       e.stopPropagation();
       isDraggingEventMarker = true;
@@ -396,6 +393,17 @@ async function handleImportIMP(evt) {
     alert('Failed to import .imp package! Make sure the file is valid.');
   }
 }
+
+window.addEventListener('dragover', (e) => e.preventDefault());
+window.addEventListener('drop', (e) => {
+  e.preventDefault();
+  if (e.dataTransfer && e.dataTransfer.files[0]) {
+    const f = e.dataTransfer.files[0];
+    if (f.name.endsWith('.imp') || f.name.endsWith('.json')) {
+      handleImportIMP({ target: { files: [f] } });
+    }
+  }
+});
 
 // Initial Boot Sequence
 resizeCanvas();
