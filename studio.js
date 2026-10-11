@@ -9,17 +9,17 @@ function createDefaultCharacters() {
     dad: {
       id: 'dad', name: 'Opponent (Lime)', x: -300, y: 20, width: 180, height: 280,
       flipX: false, color: '#39ff14', currentPose: 'idle', fps: 12, animTimer: 0,
-      danceFreq: 2, bouncePow: 0.06, bounceScale: 1.0, poses: createEmptyPoses()
+      danceFreq: 2, bouncePow: 0.06, bounceScale: 1.0, holdTimer: 0, poses: createEmptyPoses()
     },
     gf: {
       id: 'gf', name: 'Girlfriend', x: 0, y: -40, width: 200, height: 220,
       flipX: false, color: '#c026d3', currentPose: 'idle', fps: 12, animTimer: 0,
-      danceFreq: 2, bouncePow: 0.06, bounceScale: 1.0, poses: createEmptyPoses()
+      danceFreq: 2, bouncePow: 0.06, bounceScale: 1.0, holdTimer: 0, poses: createEmptyPoses()
     },
     bf: {
       id: 'bf', name: 'Boyfriend', x: 300, y: 30, width: 170, height: 260,
       flipX: false, color: '#00ffff', currentPose: 'idle', fps: 12, animTimer: 0,
-      danceFreq: 2, bouncePow: 0.06, bounceScale: 1.0, poses: createEmptyPoses()
+      danceFreq: 2, bouncePow: 0.06, bounceScale: 1.0, holdTimer: 0, poses: createEmptyPoses()
     }
   };
 }
@@ -134,7 +134,7 @@ function addNewPhase() {
   switchPhase(phases.length - 1);
 }
 
-// Scene Hierarchy / Object Tree (Selects objects behind other objects)
+// Scene Hierarchy / Object Tree
 function renderObjectTree() {
   const container = document.getElementById('object-tree-container');
   if (!container) return;
@@ -142,17 +142,17 @@ function renderObjectTree() {
 
   const cp = getCurPhase();
   const items = [
-    { id: 'dad', label: '😈 Opponent (Lime)', type: 'char' },
-    { id: 'gf',  label: '💃 Girlfriend',       type: 'char' },
-    { id: 'bf',  label: '🎤 Boyfriend',        type: 'char' }
+    { id: 'dad', label: '😈 Opponent (Lime)' },
+    { id: 'gf',  label: '💃 Girlfriend' },
+    { id: 'bf',  label: '🎤 Boyfriend' }
   ];
 
   if (cp.stageBg) {
-    items.unshift({ id: 'bg', label: '🖼️ Stage Background', type: 'bg' });
+    items.unshift({ id: 'bg', label: '🖼️ Stage Background' });
   }
 
   cp.props.forEach(p => {
-    items.push({ id: p.id, label: `📦 Prop: ${p.name}`, type: 'prop' });
+    items.push({ id: p.id, label: `📦 Prop: ${p.name}` });
   });
 
   items.forEach(it => {
@@ -203,7 +203,11 @@ function switchTab(tab) {
 
 function triggerPose(pose) {
   const t = getActiveTarget();
-  if (t && t.poses) { t.currentPose = pose; t.animTimer = 0; }
+  if (t && t.poses) {
+    t.currentPose = pose;
+    t.animTimer = 0;
+    t.holdTimer = 0.35;
+  }
 }
 
 function updateDanceFreq(val) {
