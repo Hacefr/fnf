@@ -1,4 +1,4 @@
-// --- FNF Studio Engine: Phases, Isolated Sprites, StartPos & Transitions ---
+// --- FNF Studio Engine: .imp Importer/Exporter, Downscroll & V-Slice Mobile Touch Drag ---
 const canvas = document.getElementById('stageCanvas');
 const ctx = canvas.getContext('2d');
 const container = document.getElementById('stage-canvas-container');
@@ -9,21 +9,54 @@ function resizeCanvas() {
 }
 window.addEventListener('resize', resizeCanvas);
 
-// Camera System
-const cam = {
-  x: 0,
-  y: 0,
-  targetX: 0,
-  targetY: 0,
-  zoom: 0.9,
-  shakeIntensity: 0,
-  shakeDuration: 0,
-  flashColor: '#ffffff',
-  flashAlpha: 0
+// Configuration
+const gameConfig = {
+  downscroll: false,
+  mobileTouch: false
 };
 
+// Camera System (Smart Tracking & Beat Bop)
+const cam = {
+  x: 0, y: 0,
+  targetX: 0, targetY: 0,
+  zoom: 0.9, targetZoom: 0.9,
+  bopStrength: 0.04,
+  bopFreq: 4,
+  smartTracking: true,
+  shakeIntensity: 0, shakeDuration: 0,
+  flashColor: '#ffffff', flashAlpha: 0
+};
+
+// Audio & Chart System
+let audioCtx = null;
+let instBuffer = null, voicesBuffer = null;
+let instSource = null, voicesSource = null;
+let rawAudioFiles = { inst: null, voices: null, chart: null };
+
+let chartData = null;
+let parsedNotes = [];
+let bpm = 150;
+let songSpeed = 2.6;
+let songDuration = 120000;
+let currentTime = 0;
+let startPosTime = 0;
+let isPlaying = false;
+let audioStartContextTime = 0;
+let audioSeekOffset = 0;
+
+// Beat Timing
+let curBeat = 0;
+let lastBeat = -1;
+
+// Colors for arrows
+const ARROW_COLORS = ['#C24B99', '#00FFFF', '#12FA05', '#F9393F']; // Purple, Cyan, Green, Red
+
+// Active Receptors State (0: normal, 1: pressed, 2: confirmed hit glow)
+const playerReceptors = [0, 0, 0, 0];
+const receptorGlowTimer = [0, 0, 0, 0];
+
 // =========================================================================
-// --- ISOLATED PHASES DATA ARCHITECTURE ---
+// --- ISOLATED PHASES & ICONS DATA ARCHITECTURE ---
 // =========================================================================
 
 function createEmptyPoses() {
@@ -32,18 +65,33 @@ function createEmptyPoses() {
 
 function createDefaultCharacters() {
   return {
-    dad: { id: 'dad', name: 'Opponent (Lime)', x: -380, y: 80, width: 220, height: 380, flipX: false, color: '#39ff14', currentPose: 'idle', fps: 12, animTimer: 0, poses: createEmptyPoses() },
-    gf:  { id: 'gf',  name: 'Girlfriend',      x: 0,    y: 10, width: 240, height: 320, flipX: false, color: '#a855f7', currentPose: 'idle', fps: 12, animTimer: 0, poses: createEmptyPoses() },
-    bf:  { id: 'bf',  name: 'Boyfriend',       x: 360,  y: 90, width: 200, height: 320, flipX: false, color: '#00ffff', currentPose: 'idle', fps: 12, animTimer: 0, poses: createEmptyPoses() }
+    dad: {
+      id: 'dad', name: 'Opponent (Lime)', x: -380, y: 80, width: 220, height: 380,
+      flipX: false, color: '#39ff14', currentPose: 'idle', fps: 12, animTimer: 0,
+      danceFreq: 2, bouncePow: 0.06, bounceScale: 1.0, poses: createEmptyPoses()
+    },
+    gf: {
+      id: 'gf', name: 'Girlfriend', x: 0, y: 10, width: 240, height: 320,
+      flipX: false, color: '#a855f7', currentPose: 'idle', fps: 12, animTimer: 0,
+      danceFreq: 2, bouncePow: 0.06, bounceScale: 1.0, poses: createEmptyPoses()
+    },
+    bf: {
+      id: 'bf', name: 'Boyfriend', x: 360, y: 90, width: 200, height: 320,
+      flipX: false, color: '#00ffff', currentPose: 'idle', fps: 12, animTimer: 0,
+      danceFreq: 2, bouncePow: 0.06, bounceScale: 1.0, poses: createEmptyPoses()
+    }
   };
 }
 
-// Multi-Phase State
-const phases = [
+let phases = [
   {
     id: 'phase_1',
     name: 'Phase 1',
     characters: createDefaultCharacters(),
+    icons: {
+      bf: { neutral: null, losing: null },
+      dad: { neutral: null, losing: null }
+    },
     props: [],
     stageBg: null
   }
@@ -52,8 +100,8 @@ const phases = [
 let activePhaseIndex = 0;
 function getCurPhase() { return phases[activePhaseIndex]; }
 
-let activeTargetId = 'bf'; // 'bf', 'dad', 'gf', or prop id
-let toolMode = 'move';     // 'move', 'resize', or 'cam'
+let activeTargetId = 'bf';
+let toolMode = 'move'; // 'move', 'resize', or 'cam'
 
 // Transform & Drag State
 let isInteracting = false;
@@ -118,6 +166,7 @@ function renderPhaseTabs() {
     container.appendChild(tab);
   });
   document.getElementById('lbl-phase-name').textContent = getCurPhase().name;
+  document.getElementById('lbl-icon-phase').textContent = getCurPhase().name;
 }
 
 function switchPhase(idx) {
@@ -131,7 +180,6 @@ function addNewPhase() {
   const newNum = phases.length + 1;
   const prevPhase = getCurPhase();
 
-  // Create isolated characters for the new phase (carries over position baseline, but separate sprites!)
   const newChars = createDefaultCharacters();
   ['bf', 'dad', 'gf'].forEach(cid => {
     newChars[cid].x = prevPhase.characters[cid].x;
@@ -145,6 +193,10 @@ function addNewPhase() {
     id: `phase_${newNum}`,
     name: `Phase ${newNum}`,
     characters: newChars,
+    icons: {
+      bf: { neutral: null, losing: null },
+      dad: { neutral: null, losing: null }
+    },
     props: JSON.parse(JSON.stringify(prevPhase.props)),
     stageBg: prevPhase.stageBg
   });
@@ -153,16 +205,239 @@ function addNewPhase() {
 }
 
 // =========================================================================
-// --- TIMELINE, STARTPOS & TRANSITION BLACKOUT ENGINE ---
+// --- V-SLICE MOBILE TOUCH & DRAG-ACROSS SLIDING CONTROLS ---
 // =========================================================================
 
-let songDuration = 120000; // 2 minutes default (or audio track length)
-let currentTime = 0;
-let startPosTime = 0;
-let isPlaying = false;
+function toggleMobileTouchLayer(enabled) {
+  gameConfig.mobileTouch = enabled;
+  document.getElementById('mobile-touch-layer').style.display = enabled ? 'block' : 'none';
+}
 
-// Transition State
-const timelineEvents = []; // [{ time, targetPhaseIndex, fadeOut, hold, fadeIn, overlayImg }]
+const mobileTouchLayer = document.getElementById('mobile-touch-layer');
+const hitboxes = document.querySelectorAll('.touch-hitbox');
+
+// Smooth Drag Across Keys (using elementFromPoint so user doesn't lift finger)
+function updateMobileTouches(e) {
+  e.preventDefault();
+  const activeLanes = [false, false, false, false];
+
+  // Loop through all active touches on screen
+  for (let i = 0; i < e.touches.length; i++) {
+    const touch = e.touches[i];
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (el && el.dataset.lane !== undefined) {
+      const lane = parseInt(el.dataset.lane);
+      activeLanes[lane] = true;
+    }
+  }
+
+  // Update button visual styles & trigger key presses/releases
+  hitboxes.forEach((box) => {
+    const lane = parseInt(box.dataset.lane);
+    const isDown = activeLanes[lane];
+
+    if (isDown) {
+      if (!box.classList.contains('pressed')) {
+        box.classList.add('pressed');
+        triggerPlayerLaneHit(lane);
+      }
+    } else {
+      if (box.classList.contains('pressed')) {
+        box.classList.remove('pressed');
+        playerReceptors[lane] = 0;
+      }
+    }
+  });
+}
+
+function handleTouchEnd(e) {
+  e.preventDefault();
+  updateMobileTouches(e);
+}
+
+['touchstart', 'touchmove'].forEach(evt => {
+  mobileTouchLayer.addEventListener(evt, updateMobileTouches, { passive: false });
+});
+['touchend', 'touchcancel'].forEach(evt => {
+  mobileTouchLayer.addEventListener(evt, handleTouchEnd, { passive: false });
+});
+
+function triggerPlayerLaneHit(lane) {
+  playerReceptors[lane] = 2; // glow hit
+  receptorGlowTimer[lane] = currentTime + 140;
+
+  // Trigger BF sing pose immediately
+  const dirPoses = ['singLEFT', 'singDOWN', 'singUP', 'singRIGHT'];
+  const bf = getCurPhase().characters.bf;
+  bf.currentPose = dirPoses[lane];
+  bf.animTimer = 0;
+}
+
+// Keyboard fallback
+const KEY_MAP = {
+  'KeyD': 0, 'ArrowLeft': 0,
+  'KeyF': 1, 'ArrowDown': 1,
+  'KeyJ': 2, 'ArrowUp': 2,
+  'KeyK': 3, 'ArrowRight': 3
+};
+
+window.addEventListener('keydown', (e) => {
+  if (e.repeat) return;
+  const lane = KEY_MAP[e.code];
+  if (lane !== undefined) triggerPlayerLaneHit(lane);
+});
+
+window.addEventListener('keyup', (e) => {
+  const lane = KEY_MAP[e.code];
+  if (lane !== undefined) playerReceptors[lane] = 0;
+});
+
+// =========================================================================
+// --- ICONS & BOUNCE CONFIGURATION ---
+// =========================================================================
+
+function updateDanceFreq(val) {
+  const t = getActiveTarget();
+  if (t && t.danceFreq !== undefined) t.danceFreq = parseInt(val) || 2;
+}
+
+function updateBouncePow(val) {
+  const t = getActiveTarget();
+  if (t && t.bouncePow !== undefined) t.bouncePow = parseFloat(val) || 0.06;
+}
+
+function loadCharacterIcon(state, evt) {
+  const file = evt.target.files[0];
+  if (!file) return;
+  const img = new Image();
+  img.src = URL.createObjectURL(file);
+  img.onload = () => {
+    const cp = getCurPhase();
+    const charKey = (activeTargetId === 'dad') ? 'dad' : 'bf';
+    cp.icons[charKey][state] = img;
+    alert(`Loaded ${charKey.toUpperCase()} ${state.toUpperCase()} icon for ${cp.name}!`);
+  };
+}
+
+// =========================================================================
+// --- AUDIO & CHART PARSING ENGINE ---
+// =========================================================================
+
+async function initAudioContext() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') await audioCtx.resume();
+}
+
+async function loadAudioTrack(type, evt) {
+  await initAudioContext();
+  const file = evt.target.files[0];
+  if (!file) return;
+
+  rawAudioFiles[type] = file;
+  const arrayBuf = await file.arrayBuffer();
+  const decoded = await audioCtx.decodeAudioData(arrayBuf);
+
+  if (type === 'inst') {
+    instBuffer = decoded;
+    songDuration = instBuffer.duration * 1000;
+    document.getElementById('status-inst').textContent = '✓';
+  } else {
+    voicesBuffer = decoded;
+    document.getElementById('status-voices').textContent = '✓';
+  }
+}
+
+function loadChartJSON(evt) {
+  const file = evt.target.files[0];
+  if (!file) return;
+  rawAudioFiles.chart = file;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      chartData = JSON.parse(e.target.result);
+      processChartData(chartData);
+      document.getElementById('status-chart').textContent = '✓';
+    } catch (err) {
+      alert('Invalid FNF JSON format!');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function processChartData(data) {
+  const song = data.song || data;
+  bpm = song.bpm || 150;
+  songSpeed = song.speed || 2.6;
+
+  parsedNotes = [];
+  const isNMV = song.format === 'nmv2' || song.lanes !== undefined || Boolean(song.format);
+
+  (song.notes || []).forEach(sec => {
+    const mustHit = sec.mustHitSection;
+    (sec.sectionNotes || []).forEach(n => {
+      const strumTime = n[0];
+      const rawDir = n[1];
+      const sustain = n[2] || 0;
+      const isPlayer = isNMV ? (rawDir < 4) : (mustHit ? rawDir < 4 : rawDir >= 4);
+      parsedNotes.push({ time: strumTime, dir: rawDir % 4, sustain: sustain, isPlayer: isPlayer });
+    });
+  });
+
+  parsedNotes.sort((a, b) => a.time - b.time);
+  document.getElementById('chart-info').innerHTML = `
+    <b>Song:</b> ${song.song || 'Loaded'} | <b>BPM:</b> ${bpm}<br>
+    <b>Speed:</b> ${songSpeed} | <b>Total Notes:</b> ${parsedNotes.length}
+  `;
+}
+
+function togglePlayback() {
+  if (isPlaying) stopPlayback();
+  else startPlaybackAt(currentTime);
+}
+
+async function startPlaybackAt(timeMs) {
+  await initAudioContext();
+  stopAudioSources();
+
+  audioSeekOffset = timeMs / 1000;
+  audioStartContextTime = audioCtx.currentTime;
+
+  if (instBuffer) {
+    instSource = audioCtx.createBufferSource();
+    instSource.buffer = instBuffer;
+    instSource.connect(audioCtx.destination);
+    instSource.start(0, audioSeekOffset);
+  }
+  if (voicesBuffer) {
+    voicesSource = audioCtx.createBufferSource();
+    voicesSource.buffer = voicesBuffer;
+    voicesSource.connect(audioCtx.destination);
+    voicesSource.start(0, audioSeekOffset);
+  }
+
+  isPlaying = true;
+  document.getElementById('btn-play-pause').textContent = '⏸ Pause';
+  document.getElementById('btn-play-pause').classList.replace('btn-green', 'btn-gray');
+}
+
+function stopPlayback() {
+  isPlaying = false;
+  stopAudioSources();
+  document.getElementById('btn-play-pause').textContent = '▶ Play';
+  document.getElementById('btn-play-pause').classList.replace('btn-gray', 'btn-green');
+}
+
+function stopAudioSources() {
+  if (instSource) { try { instSource.stop(); } catch(e){} instSource = null; }
+  if (voicesSource) { try { voicesSource.stop(); } catch(e){} voicesSource = null; }
+}
+
+// =========================================================================
+// --- TIMELINE, STARTPOS & SMART BLACKOUT ENGINE ---
+// =========================================================================
+
+let timelineEvents = [];
 let activeTransition = null;
 let transitionOverlayImg = null;
 
@@ -183,7 +458,7 @@ function setStartPos() {
 
 function playFromStartPos() {
   currentTime = startPosTime;
-  isPlaying = true;
+  startPlaybackAt(startPosTime);
 }
 
 function scrubTimeline(e) {
@@ -193,9 +468,10 @@ function scrubTimeline(e) {
   currentTime = pct * songDuration;
   document.getElementById('playhead').style.left = `${pct * 100}%`;
   document.getElementById('lbl-current-time').textContent = formatTime(currentTime);
+
+  if (isPlaying) startPlaybackAt(currentTime);
 }
 
-// Blackout & Transition Logic
 function openTransitionModal() {
   const select = document.getElementById('trans-target-phase');
   select.innerHTML = '';
@@ -219,6 +495,9 @@ function loadTransitionOverlay(evt) {
 
 function saveTransitionEvent() {
   const targetPhase = parseInt(document.getElementById('trans-target-phase').value) || 0;
+  const uiMode = document.getElementById('trans-ui-mode').value;
+  const peakFlash = document.getElementById('trans-peak-flash').value;
+  const peakShake = parseFloat(document.getElementById('trans-peak-shake').value) || 0;
   const fadeOut = parseFloat(document.getElementById('trans-fade-out').value) || 0.4;
   const hold = parseFloat(document.getElementById('trans-hold').value) || 1.2;
   const fadeIn = parseFloat(document.getElementById('trans-fade-in').value) || 0.5;
@@ -226,6 +505,9 @@ function saveTransitionEvent() {
   timelineEvents.push({
     time: currentTime,
     targetPhaseIndex: targetPhase,
+    uiMode: uiMode,
+    peakFlash: peakFlash,
+    peakShake: peakShake,
     fadeOut: fadeOut,
     hold: hold,
     fadeIn: fadeIn,
@@ -248,14 +530,14 @@ function renderEventMarkers() {
   });
 }
 
-// Live Transition Previewer
 function previewCurrentTransition() {
   const nextIdx = (activePhaseIndex + 1) % phases.length;
   triggerBlackoutTransition({
-    fadeOut: 0.4,
-    hold: 1.2,
-    fadeIn: 0.5,
+    fadeOut: 0.4, hold: 1.2, fadeIn: 0.5,
     targetPhaseIndex: nextIdx,
+    uiMode: 'keep_ui',
+    peakFlash: '#ff1744',
+    peakShake: 20,
     overlayImg: transitionOverlayImg
   });
 }
@@ -374,6 +656,8 @@ function selectTarget(id) {
   if (cp.characters[id]) {
     document.getElementById('char-select').value = id;
     document.getElementById('char-flip').checked = cp.characters[id].flipX;
+    document.getElementById('char-dance-freq').value = cp.characters[id].danceFreq;
+    document.getElementById('char-bounce-pow').value = cp.characters[id].bouncePow;
   }
   const t = getActiveTarget();
   document.getElementById('lbl-selected').textContent = t ? (t.name || t.id) : 'none';
@@ -381,9 +665,7 @@ function selectTarget(id) {
 
 function updateSelectedTransform() {
   const t = getActiveTarget();
-  if (t && t.flipX !== undefined) {
-    t.flipX = document.getElementById('char-flip').checked;
-  }
+  if (t && t.flipX !== undefined) t.flipX = document.getElementById('char-flip').checked;
 }
 
 function switchTab(tab) {
@@ -416,12 +698,8 @@ function addProp(evt) {
   img.src = URL.createObjectURL(file);
   img.onload = () => {
     const p = {
-      id: 'prop_' + Date.now(),
-      name: file.name.split('.')[0] || 'Prop',
-      img: img,
-      x: 0, y: 0,
-      width: img.width || 200,
-      height: img.height || 200
+      id: 'prop_' + Date.now(), name: file.name.split('.')[0] || 'Prop',
+      img: img, x: 0, y: 0, width: img.width || 200, height: img.height || 200
     };
     getCurPhase().props.push(p);
     selectTarget(p.id);
@@ -433,9 +711,7 @@ function refreshPropsList() {
   const list = document.getElementById('props-list');
   list.innerHTML = '';
   const cp = getCurPhase();
-  if (cp.stageBg) {
-    list.innerHTML += `<div style="padding:4px; cursor:pointer;" onclick="selectTarget('bg')">🖼️ Main Background</div>`;
-  }
+  if (cp.stageBg) list.innerHTML += `<div style="padding:4px; cursor:pointer;" onclick="selectTarget('bg')">🖼️ Main Background</div>`;
   cp.props.forEach(p => {
     list.innerHTML += `<div style="padding:4px; cursor:pointer;" onclick="selectTarget('${p.id}')">📦 ${p.name}</div>`;
   });
@@ -445,7 +721,7 @@ function triggerFlash(col, a) { cam.flashColor = col; cam.flashAlpha = a; }
 function triggerShake(amt, d) { cam.shakeIntensity = amt; cam.shakeDuration = d; }
 
 // =========================================================================
-// --- FRAME STUDIO (Operating on Current Isolated Phase) ---
+// --- FRAME STUDIO ---
 // =========================================================================
 
 const POSE_KEYS = [
@@ -581,10 +857,6 @@ function deleteSelectedFrame() {
   renderPosesGrid();
 }
 
-// =========================================================================
-// --- SPRITESHEET SLICER ---
-// =========================================================================
-
 let rawSlicerImg = null;
 function openSlicerModal() { document.getElementById('slicer-modal').style.display = 'flex'; }
 function closeSlicerModal() { document.getElementById('slicer-modal').style.display = 'none'; }
@@ -622,7 +894,7 @@ function processSlices() {
 }
 
 // =========================================================================
-// --- MAIN RENDER & TRANSITION ANIMATION LOOP ---
+// --- MAIN RENDER, NOTES SCROLL, SMART CAM & SMART BLACKOUT ---
 // =========================================================================
 
 let lastTime = performance.now();
@@ -632,36 +904,97 @@ function render() {
   const dt = (now - lastTime) / 1000;
   lastTime = now;
 
-  // Timeline scrubber update if simulating
+  // Real-time audio sync
   if (isPlaying) {
-    currentTime += dt * 1000;
-    if (currentTime >= songDuration) { currentTime = 0; isPlaying = false; }
+    if (audioCtx && instSource) {
+      currentTime = (audioCtx.currentTime - audioStartContextTime + audioSeekOffset) * 1000;
+    } else {
+      currentTime += dt * 1000;
+    }
+
+    if (currentTime >= songDuration) { stopPlayback(); currentTime = 0; }
+
     const pct = (currentTime / songDuration) * 100;
     document.getElementById('playhead').style.left = `${pct}%`;
     document.getElementById('lbl-current-time').textContent = formatTime(currentTime);
 
     // Check transition triggers
     timelineEvents.forEach(ev => {
-      if (!ev.triggered && Math.abs(currentTime - ev.time) <= 100) {
+      if (!ev.triggered && Math.abs(currentTime - ev.time) <= 120) {
         ev.triggered = true;
         triggerBlackoutTransition(ev);
       }
     });
+
+    // Smart Note Sing Trigger
+    const curSingNote = parsedNotes.find(n => Math.abs(n.time - currentTime) <= 80);
+    if (curSingNote) {
+      const charKey = curSingNote.isPlayer ? 'bf' : 'dad';
+      const dirPoses = ['singLEFT', 'singDOWN', 'singUP', 'singRIGHT'];
+      const targetChar = getCurPhase().characters[charKey];
+      targetChar.currentPose = dirPoses[curSingNote.dir];
+      targetChar.animTimer = 0;
+    }
   }
 
-  // Camera tracking
-  const target = getActiveTarget();
-  if (toolMode === 'cam') {
+  // Decay player receptor glow
+  for (let i = 0; i < 4; i++) {
+    if (playerReceptors[i] === 2 && currentTime > receptorGlowTimer[i]) {
+      playerReceptors[i] = 0;
+    }
+  }
+
+  // Musical Beat Bop Calculation
+  const beatDuration = (60 / bpm) * 1000;
+  curBeat = Math.floor(currentTime / beatDuration);
+
+  if (curBeat !== lastBeat && curBeat >= 0) {
+    lastBeat = curBeat;
+
+    // 1. Smart Camera Beat Bop
+    if (curBeat % cam.bopFreq === 0) {
+      cam.zoom += cam.bopStrength;
+    }
+
+    // 2. Character Idle Beat Bounce
+    const cp = getCurPhase();
+    ['dad', 'bf', 'gf'].forEach(cid => {
+      const ch = cp.characters[cid];
+      if (curBeat % ch.danceFreq === 0) {
+        ch.bounceScale = 1.0 + ch.bouncePow;
+        if (!ch.currentPose.startsWith('sing')) {
+          ch.animTimer = 0;
+        }
+      }
+    });
+  }
+
+  // Smooth Camera Lerp & Tracking
+  const cp = getCurPhase();
+  if (cam.smartTracking && toolMode !== 'cam') {
+    const curSingNote = parsedNotes.find(n => Math.abs(n.time - currentTime) <= 250);
+    if (curSingNote) {
+      const singer = curSingNote.isPlayer ? cp.characters.bf : cp.characters.dad;
+      cam.targetX = singer.x;
+      cam.targetY = singer.y - 30;
+    } else {
+      cam.targetX = 0;
+      cam.targetY = 0;
+    }
+  } else if (toolMode === 'cam') {
+    const target = getActiveTarget();
     cam.targetX = target.x;
-    cam.targetY = target.y - 40;
+    cam.targetY = target.y - 30;
   } else {
     cam.targetX = 0;
     cam.targetY = 0;
   }
-  cam.x += (cam.targetX - cam.x) * 0.1;
-  cam.y += (cam.targetY - cam.y) * 0.1;
 
-  // Screen shake
+  cam.x += (cam.targetX - cam.x) * 0.08;
+  cam.y += (cam.targetY - cam.y) * 0.08;
+  cam.zoom += (cam.targetZoom - cam.zoom) * 0.08;
+
+  // Camera Shake
   let shakeX = 0, shakeY = 0;
   if (cam.shakeDuration > 0) {
     cam.shakeDuration -= dt;
@@ -672,12 +1005,14 @@ function render() {
   ctx.fillStyle = '#06070a';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+  // =========================================================================
+  // --- LAYER 1: WORLD (Background, Props, Characters) ---
+  // =========================================================================
+
   ctx.save();
   ctx.translate(canvas.width / 2 + shakeX, canvas.height / 2 + shakeY);
   ctx.scale(cam.zoom, cam.zoom);
   ctx.translate(-cam.x, -cam.y);
-
-  const cp = getCurPhase();
 
   // 1. Draw Background
   if (cp.stageBg && cp.stageBg.img) {
@@ -696,10 +1031,11 @@ function render() {
     ctx.drawImage(p.img, p.x - p.width / 2, p.y - p.height / 2, p.width, p.height);
   });
 
-  // 3. Draw Characters
+  // 3. Draw Characters with Bounce Scale
   ['gf', 'dad', 'bf'].forEach(id => {
     const c = cp.characters[id];
     c.animTimer = (c.animTimer || 0) + dt;
+    c.bounceScale += (1.0 - c.bounceScale) * 0.12;
 
     const frames = c.poses[c.currentPose] && c.poses[c.currentPose].length > 0 
       ? c.poses[c.currentPose] 
@@ -708,6 +1044,7 @@ function render() {
     ctx.save();
     ctx.translate(c.x, c.y);
     if (c.flipX) ctx.scale(-1, 1);
+    ctx.scale(c.bounceScale, 2.0 - c.bounceScale);
 
     if (frames && frames.length > 0) {
       const frameIndex = Math.floor(c.animTimer * c.fps) % frames.length;
@@ -716,7 +1053,6 @@ function render() {
       const fh = curFrame.h || c.height;
       const ox = curFrame.ox || 0;
       const oy = curFrame.oy || 0;
-
       ctx.drawImage(curFrame.img, -fw / 2 + ox, -fh / 2 + oy, fw, fh);
     } else {
       ctx.fillStyle = c.color + '33';
@@ -735,17 +1071,18 @@ function render() {
     ctx.restore();
   });
 
-  // 4. Draw Bounding Box & 4-Side Handles
-  if (target && toolMode !== 'cam') {
-    const b = getBounds(target);
+  // 4. Selection Bounding Box
+  const activeObj = getActiveTarget();
+  if (activeObj && toolMode !== 'cam') {
+    const b = getBounds(activeObj);
     ctx.strokeStyle = '#38bdf8';
     ctx.lineWidth = 2;
     ctx.setLineDash([6, 4]);
-    ctx.strokeRect(b.left, b.top, target.width, target.height);
+    ctx.strokeRect(b.left, b.top, activeObj.width, activeObj.height);
     ctx.setLineDash([]);
 
     if (toolMode === 'resize') {
-      const handles = getHandles(target);
+      const handles = getHandles(activeObj);
       const hSize = 8 / cam.zoom;
       ctx.fillStyle = '#ffffff';
       ctx.strokeStyle = '#0284c7';
@@ -759,51 +1096,74 @@ function render() {
 
   ctx.restore();
 
-  // 5. Blackout Fade & Transition Sequencer
+  // =========================================================================
+  // --- LAYER 2: SMART BLACKOUT (WORLD ONLY - KEEP UI VISIBLE) ---
+  // =========================================================================
+
+  let blackAlpha = 0;
   if (activeTransition) {
     activeTransition.elapsed += dt;
     const t = activeTransition.elapsed;
-    let blackAlpha = 0;
 
     if (t < activeTransition.fadeOut) {
-      // 1. Fading into black
       blackAlpha = t / activeTransition.fadeOut;
     } else if (t < activeTransition.fadeOut + activeTransition.hold) {
-      // 2. Pitch black hold -> SWAP PHASE SILENTLY HERE!
       blackAlpha = 1.0;
       if (!activeTransition.swapped) {
         switchPhase(activeTransition.targetPhaseIndex);
         activeTransition.swapped = true;
+
+        if (activeTransition.peakFlash && activeTransition.peakFlash !== 'none') {
+          triggerFlash(activeTransition.peakFlash, 0.9);
+        }
+        if (activeTransition.peakShake && activeTransition.peakShake > 0) {
+          triggerShake(activeTransition.peakShake, 0.4);
+        }
       }
     } else if (t < activeTransition.total) {
-      // 3. Fading back from black
-      const remaining = activeTransition.total - t;
-      blackAlpha = remaining / activeTransition.fadeIn;
+      blackAlpha = (activeTransition.total - t) / activeTransition.fadeIn;
     } else {
       activeTransition = null;
     }
 
-    if (activeTransition) {
-      // Render Black Curtain
+    if (activeTransition && activeTransition.uiMode === 'keep_ui') {
       ctx.fillStyle = '#000000';
       ctx.globalAlpha = Math.min(1, Math.max(0, blackAlpha));
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // Render Optional Transition Overlay Image
-      if (activeTransition.overlayImg && blackAlpha >= 0.8) {
-        const oi = activeTransition.overlayImg;
-        const scale = Math.min(canvas.width * 0.5 / oi.width, canvas.height * 0.5 / oi.height);
-        const ow = oi.width * scale;
-        const oh = oi.height * scale;
-        ctx.globalAlpha = 1.0;
-        ctx.drawImage(oi, (canvas.width - ow) / 2, (canvas.height - oh) / 2, ow, oh);
-      }
-
       ctx.globalAlpha = 1.0;
     }
   }
 
-  // Flash FX
+  // =========================================================================
+  // --- LAYER 3: GAMEPLAY UI (STRUM ARROWS, NOTES & HEALTH BAR WITH ICONS) ---
+  // =========================================================================
+
+  drawStrumlinesAndNotes(ctx);
+  drawHealthBarWithIcons(ctx, cp);
+
+  // =========================================================================
+  // --- LAYER 4: FULL SCREEN BLACKOUT (IF HIDE EVERYTHING MODE) ---
+  // =========================================================================
+
+  if (activeTransition && activeTransition.uiMode === 'hide_all') {
+    ctx.fillStyle = '#000000';
+    ctx.globalAlpha = Math.min(1, Math.max(0, blackAlpha));
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (activeTransition.overlayImg && blackAlpha >= 0.7) {
+      const oi = activeTransition.overlayImg;
+      const scale = Math.min(canvas.width * 0.5 / oi.width, canvas.height * 0.5 / oi.height);
+      const ow = oi.width * scale, oh = oi.height * scale;
+      ctx.globalAlpha = 1.0;
+      ctx.drawImage(oi, (canvas.width - ow) / 2, (canvas.height - oh) / 2, ow, oh);
+    }
+    ctx.globalAlpha = 1.0;
+  }
+
+  // =========================================================================
+  // --- LAYER 5: INTENSITY FLASH FX (PIERCES THROUGH BLACKOUT) ---
+  // =========================================================================
+
   if (cam.flashAlpha > 0) {
     ctx.fillStyle = cam.flashColor;
     ctx.globalAlpha = cam.flashAlpha;
@@ -815,28 +1175,371 @@ function render() {
   requestAnimationFrame(render);
 }
 
-// Project Exporter
-function exportProject() {
-  const project = {
-    phases: phases.map(p => ({
-      name: p.name,
-      characters: {
-        dad: { x: p.characters.dad.x, y: p.characters.dad.y, w: p.characters.dad.width, h: p.characters.dad.height, flipX: p.characters.dad.flipX, fps: p.characters.dad.fps },
-        bf:  { x: p.characters.bf.x,  y: p.characters.bf.y,  w: p.characters.bf.width,  h: p.characters.bf.height,  flipX: p.characters.bf.flipX,  fps: p.characters.bf.fps },
-        gf:  { x: p.characters.gf.x,  y: p.characters.gf.y,  w: p.characters.gf.width,  h: p.characters.gf.height,  flipX: p.characters.gf.flipX,  fps: p.characters.gf.fps }
+// Renders the 4 Dad and 4 BF Arrow Receptors + Scrolling Notes (Upscroll or Downscroll)
+function drawStrumlinesAndNotes(ctx) {
+  const downscroll = gameConfig.downscroll;
+  const strumY = downscroll ? (canvas.height - 70) : 55;
+  const spacing = 46;
+  const size = 18;
+  const scrollFactor = 0.45 * songSpeed;
+
+  // Dad Receptors (Left: 4 arrows)
+  for (let i = 0; i < 4; i++) {
+    drawMiniArrow(ctx, 60 + i * spacing, strumY, size, i, ARROW_COLORS[i], 'stroke');
+  }
+
+  // BF Receptors (Right: 4 arrows)
+  const bfStartX = canvas.width - (4 * spacing) - 40;
+  for (let i = 0; i < 4; i++) {
+    const rx = bfStartX + i * spacing;
+    const style = playerReceptors[i] === 2 ? 'glow' : (playerReceptors[i] === 1 ? 'fill' : 'stroke');
+    drawMiniArrow(ctx, rx, strumY, size, i, ARROW_COLORS[i], style);
+  }
+
+  // Render scrolling notes from chart
+  if (isPlaying && parsedNotes.length > 0) {
+    parsedNotes.forEach(n => {
+      const timeDiff = n.time - currentTime;
+      if (timeDiff < -200 || timeDiff > 1200) return;
+
+      const noteX = n.isPlayer ? (bfStartX + n.dir * spacing) : (60 + n.dir * spacing);
+      const noteY = downscroll ? (strumY - timeDiff * scrollFactor) : (strumY + timeDiff * scrollFactor);
+
+      if (noteY >= -50 && noteY <= canvas.height + 50) {
+        drawMiniArrow(ctx, noteX, noteY, size, n.dir, ARROW_COLORS[n.dir], 'fill');
+      }
+    });
+  }
+}
+
+function drawMiniArrow(ctx, x, y, size, dir, color, style = 'stroke') {
+  ctx.save();
+  ctx.translate(x, y);
+  const angles = [-Math.PI / 2, Math.PI, 0, Math.PI / 2];
+  ctx.rotate(angles[dir]);
+
+  ctx.beginPath();
+  ctx.moveTo(0, -size);
+  ctx.lineTo(size * 0.9, 0);
+  ctx.lineTo(size * 0.45, 0);
+  ctx.lineTo(size * 0.45, size * 0.9);
+  ctx.lineTo(-size * 0.45, size * 0.9);
+  ctx.lineTo(-size * 0.45, 0);
+  ctx.lineTo(-size * 0.9, 0);
+  ctx.closePath();
+
+  if (style === 'fill') {
+    ctx.fillStyle = color;
+    ctx.fill();
+  } else if (style === 'glow') {
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 15;
+    ctx.fill();
+  } else {
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// Renders the Health Bar and Phase Icons bouncing on beat
+function drawHealthBarWithIcons(ctx, phase) {
+  const barW = 380, barH = 12;
+  const barX = (canvas.width - barW) / 2;
+  const barY = gameConfig.downscroll ? 45 : (canvas.height - 35);
+
+  ctx.fillStyle = '#ff1744';
+  ctx.fillRect(barX, barY, barW, barH);
+  ctx.fillStyle = '#39ff14';
+  ctx.fillRect(barX + barW / 2, barY, barW / 2, barH);
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(barX, barY, barW, barH);
+
+  const iconBounce = Math.max(1.0, 1.0 + (cam.zoom - cam.targetZoom) * 1.2);
+  const iconSize = 42 * iconBounce;
+
+  const dadIcon = phase.icons.dad.neutral;
+  if (dadIcon) {
+    ctx.drawImage(dadIcon, barX + barW / 2 - iconSize - 10, barY - iconSize / 2, iconSize, iconSize);
+  }
+
+  const bfIcon = phase.icons.bf.neutral;
+  if (bfIcon) {
+    ctx.drawImage(bfIcon, barX + barW / 2 + 10, barY - iconSize / 2, iconSize, iconSize);
+  }
+}
+
+// =========================================================================
+// --- EXPORT & IMPORT .IMP PACKAGE ENGINE ---
+// =========================================================================
+
+function fileToBase64(file) {
+  return new Promise((resolve) => {
+    if (!file) return resolve(null);
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.readAsDataURL(file);
+  });
+}
+
+function imageToBase64(img) {
+  if (!img) return null;
+  if (img.src && img.src.startsWith('data:')) return img.src;
+  const c = document.createElement('canvas');
+  c.width = img.width || 200;
+  c.height = img.height || 200;
+  const cx = c.getContext('2d');
+  cx.drawImage(img, 0, 0);
+  return c.toDataURL('image/png');
+}
+
+function base64ToArrayBuffer(base64) {
+  const raw = window.atob(base64.split(',')[1] || base64);
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return bytes.buffer;
+}
+
+function loadImageFromB64(b64) {
+  return new Promise((resolve) => {
+    if (!b64) return resolve(null);
+    const img = new Image();
+    img.src = b64;
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+  });
+}
+
+// Export Complete .imp Package
+async function exportIMPPackage() {
+  const btn = event.target;
+  btn.textContent = '📦 Packaging .imp...';
+
+  const instB64 = await fileToBase64(rawAudioFiles.inst);
+  const voicesB64 = await fileToBase64(rawAudioFiles.voices);
+
+  const serializedPhases = phases.map(p => ({
+    id: p.id,
+    name: p.name,
+    characters: {
+      dad: serializeCharacter(p.characters.dad),
+      bf:  serializeCharacter(p.characters.bf),
+      gf:  serializeCharacter(p.characters.gf)
+    },
+    icons: {
+      dad: {
+        neutral: imageToBase64(p.icons.dad.neutral),
+        losing:  imageToBase64(p.icons.dad.losing)
       },
-      props: p.props.map(pr => ({ name: pr.name, x: pr.x, y: pr.y, w: pr.width, h: pr.height }))
-    })),
-    events: timelineEvents,
-    startPos: startPosTime
+      bf: {
+        neutral: imageToBase64(p.icons.bf.neutral),
+        losing:  imageToBase64(p.icons.bf.losing)
+      }
+    },
+    stageBg: p.stageBg ? { ...p.stageBg, imgB64: imageToBase64(p.stageBg.img), img: undefined } : null,
+    props: p.props.map(pr => ({ ...pr, imgB64: imageToBase64(pr.img), img: undefined }))
+  }));
+
+  const impPackage = {
+    format: 'IMP_STUDIO_V1',
+    created: Date.now(),
+    startPos: startPosTime,
+    config: {
+      downscroll: gameConfig.downscroll
+    },
+    camera: {
+      baseZoom: cam.targetZoom,
+      bopStrength: cam.bopStrength,
+      bopFreq: cam.bopFreq,
+      smartTracking: cam.smartTracking
+    },
+    audio: {
+      inst: instB64,
+      voices: voicesB64
+    },
+    chart: chartData,
+    phases: serializedPhases,
+    events: timelineEvents
   };
 
-  const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify(impPackage)], { type: 'application/octet-stream' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'mod_phase_project.json';
+  a.download = `${chartData?.song?.song || 'my_mod'}.imp`;
   a.click();
+
+  btn.textContent = '📦 Export .imp Package';
 }
+
+function serializeCharacter(c) {
+  const posesB64 = {};
+  for (const [key, frames] of Object.entries(c.poses)) {
+    posesB64[key] = frames.map(f => ({
+      imgB64: imageToBase64(f.img),
+      w: f.w, h: f.h, ox: f.ox, oy: f.oy
+    }));
+  }
+
+  return {
+    id: c.id, name: c.name, x: c.x, y: c.y, width: c.width, height: c.height,
+    flipX: c.flipX, fps: c.fps, danceFreq: c.danceFreq, bouncePow: c.bouncePow,
+    poses: posesB64
+  };
+}
+
+// Full .imp Project Importer
+async function handleImportIMP(evt) {
+  const file = evt.target.files[0];
+  if (!file) return;
+
+  const text = await file.text();
+  try {
+    const imp = JSON.parse(text);
+    if (!imp.format || !imp.format.startsWith('IMP_STUDIO')) {
+      alert('File is not a valid FNF Studio .imp file!');
+      return;
+    }
+
+    await initAudioContext();
+
+    // 1. Rebuild Audio
+    if (imp.audio?.inst) {
+      const buf = base64ToArrayBuffer(imp.audio.inst);
+      instBuffer = await audioCtx.decodeAudioData(buf);
+      songDuration = instBuffer.duration * 1000;
+      document.getElementById('status-inst').textContent = '✓';
+    }
+    if (imp.audio?.voices) {
+      const buf = base64ToArrayBuffer(imp.audio.voices);
+      voicesBuffer = await audioCtx.decodeAudioData(buf);
+      document.getElementById('status-voices').textContent = '✓';
+    }
+
+    // 2. Rebuild Chart
+    if (imp.chart) {
+      chartData = imp.chart;
+      processChartData(chartData);
+      document.getElementById('status-chart').textContent = '✓';
+    }
+
+    // 3. Rebuild Settings & Camera
+    if (imp.config) {
+      gameConfig.downscroll = !!imp.config.downscroll;
+      document.getElementById('opt-downscroll').checked = gameConfig.downscroll;
+    }
+    if (imp.camera) {
+      cam.targetZoom = imp.camera.baseZoom || 0.9;
+      cam.bopStrength = imp.camera.bopStrength || 0.04;
+      cam.bopFreq = imp.camera.bopFreq || 4;
+      cam.smartTracking = imp.camera.smartTracking !== false;
+      document.getElementById('cam-base-zoom').value = cam.targetZoom;
+      document.getElementById('cam-bop-strength').value = cam.bopStrength;
+      document.getElementById('cam-bop-freq').value = cam.bopFreq;
+      document.getElementById('cam-smart-toggle').checked = cam.smartTracking;
+    }
+
+    // 4. Rebuild StartPos & Events
+    startPosTime = imp.startPos || 0;
+    document.getElementById('lbl-startpos-time').textContent = `StartPos: ${formatTime(startPosTime)}`;
+    const pct = (startPosTime / songDuration) * 100;
+    document.getElementById('startposMarker').style.left = `${pct}%`;
+
+    timelineEvents = imp.events || [];
+    renderEventMarkers();
+
+    // 5. Rebuild All Phases & Characters
+    const reconstructedPhases = [];
+    for (const p of imp.phases) {
+      const newChars = createDefaultCharacters();
+
+      for (const cid of ['dad', 'bf', 'gf']) {
+        const charData = p.characters[cid];
+        if (!charData) continue;
+        newChars[cid].x = charData.x;
+        newChars[cid].y = charData.y;
+        newChars[cid].width = charData.width;
+        newChars[cid].height = charData.height;
+        newChars[cid].flipX = charData.flipX;
+        newChars[cid].fps = charData.fps || 12;
+        newChars[cid].danceFreq = charData.danceFreq || 2;
+        newChars[cid].bouncePow = charData.bouncePow || 0.06;
+
+        // Restore animation frames
+        for (const [poseKey, frames] of Object.entries(charData.poses || {})) {
+          newChars[cid].poses[poseKey] = [];
+          for (const f of frames) {
+            const img = await loadImageFromB64(f.imgB64);
+            if (img) {
+              newChars[cid].poses[poseKey].push({
+                img: img, w: f.w, h: f.h, ox: f.ox, oy: f.oy
+              });
+            }
+          }
+        }
+      }
+
+      // Restore icons
+      const dadNeutral = await loadImageFromB64(p.icons?.dad?.neutral);
+      const dadLosing = await loadImageFromB64(p.icons?.dad?.losing);
+      const bfNeutral = await loadImageFromB64(p.icons?.bf?.neutral);
+      const bfLosing = await loadImageFromB64(p.icons?.bf?.losing);
+
+      // Restore stage background
+      let restoredBg = null;
+      if (p.stageBg?.imgB64) {
+        const bgImg = await loadImageFromB64(p.stageBg.imgB64);
+        restoredBg = { ...p.stageBg, img: bgImg };
+      }
+
+      // Restore props
+      const restoredProps = [];
+      for (const pr of p.props || []) {
+        if (pr.imgB64) {
+          const propImg = await loadImageFromB64(pr.imgB64);
+          restoredProps.push({ ...pr, img: propImg });
+        }
+      }
+
+      reconstructedPhases.push({
+        id: p.id,
+        name: p.name,
+        characters: newChars,
+        icons: {
+          dad: { neutral: dadNeutral, losing: dadLosing },
+          bf:  { neutral: bfNeutral, losing: bfLosing }
+        },
+        stageBg: restoredBg,
+        props: restoredProps
+      });
+    }
+
+    phases = reconstructedPhases;
+    activePhaseIndex = 0;
+    renderPhaseTabs();
+    selectTarget('bf');
+    refreshPropsList();
+
+    alert(`Successfully loaded mod package: "${imp.chart?.song?.song || 'Project'}"!`);
+  } catch (err) {
+    console.error(err);
+    alert('Failed to import .imp package! Make sure the file is valid.');
+  }
+}
+
+// Drag & Drop .imp directly onto window
+window.addEventListener('dragover', (e) => e.preventDefault());
+window.addEventListener('drop', (e) => {
+  e.preventDefault();
+  if (e.dataTransfer && e.dataTransfer.files[0]) {
+    const f = e.dataTransfer.files[0];
+    if (f.name.endsWith('.imp') || f.name.endsWith('.json')) {
+      handleImportIMP({ target: { files: [f] } });
+    }
+  }
+});
 
 resizeCanvas();
 setToolMode('move');
