@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>FNF Mod Player</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; touch-action: manipulation; }
+  body {
+    background: #06070a;
+    color: #fff;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* Full Screen Drag & Drop Overlay */
+  #drop-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(6, 8, 14, 0.92);
+    border: 4px dashed #39ff14;
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    font-weight: bold;
+    color: #39ff14;
+    pointer-events: none;
+    text-shadow: 0 0 16px rgba(57, 255, 20, 0.6);
+  }
+
+  /* Setup / Song Loader Modal */
+  #loader-screen {
+    position: absolute;
+    z-index: 50;
+    background: rgba(16, 20, 32, 0.97);
+    border: 2px solid #39ff14;
+    border-radius: 12px;
+    padding: 24px;
+    width: 520px;
+    max-width: 94vw;
+    box-shadow: 0 0 35px rgba(57, 255, 20, 0.25);
+    text-align: center;
+  }
+
+  h1 {
+    font-size: 22px;
+    margin-bottom: 4px;
+    color: #39ff14;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+  }
+  p.sub { font-size: 12px; color: #8f9bb3; margin-bottom: 16px; }
+
+  .drop-card {
+    border: 2px dashed #2a354d;
+    background: #111522;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 14px;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+  .drop-card:hover { border-color: #39ff14; background: #171d30; }
+  .drop-card p { font-size: 13px; color: #cbd5e1; }
+  .drop-card small { display: block; font-size: 11px; color: #64748b; margin-top: 4px; }
+
+  .file-status-box {
+    background: #0d101a;
+    border: 1px solid #1f2738;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    text-align: left;
+    margin-bottom: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .file-item { display: flex; justify-content: space-between; color: #94a3b8; }
+  .file-item.loaded { color: #39ff14; font-weight: bold; }
+
+  /* Settings Grid */
+  .settings-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 14px;
+    font-size: 12px;
+    text-align: left;
+    background: #0e121d;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #1c2438;
+  }
+  .settings-grid label { display: flex; align-items: center; gap: 6px; cursor: pointer; color: #cbd5e1; }
+
+  .speed-slider-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    font-size: 12px;
+    background: #0e121d;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #1c2438;
+  }
+  .speed-slider-row input[type="range"] { flex: 1; margin: 0 10px; accent-color: #39ff14; }
+
+  #btn-start {
+    width: 100%;
+    padding: 12px;
+    font-size: 15px;
+    font-weight: bold;
+    border: none;
+    border-radius: 8px;
+    background: #39ff14;
+    color: #000;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+  #btn-start:disabled { background: #203320; color: #667c66; cursor: not-allowed; opacity: 0.6; }
+  #btn-start:not(:disabled):hover { background: #50ff30; box-shadow: 0 0 20px rgba(57, 255, 20, 0.7); }
+
+  /* Game Viewport Container */
+  #game-container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+  }
+  canvas { display: block; width: 100%; height: 100%; }
+
+  /* V-Slice Mobile Touch Controls Layer */
+  #mobile-touch-layer {
+    display: none;
+    position: absolute;
+    bottom: 20px;
+    left: 0; right: 0;
+    height: 80px;
+    z-index: 40;
+    padding: 0 16px;
+  }
+  .touch-hitbox-container {
+    width: 100%; height: 100%;
+    display: flex; gap: 8px;
+    justify-content: center; align-items: center;
+  }
+  .touch-hitbox {
+    flex: 1; max-width: 90px; height: 100%;
+    border-radius: 10px;
+    background: rgba(18, 24, 38, 0.65);
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px; color: #fff;
+    transition: 0.08s; user-select: none;
+  }
+  .touch-hitbox[data-lane="0"] { border-color: rgba(194, 75, 153, 0.8); }
+  .touch-hitbox[data-lane="1"] { border-color: rgba(0, 255, 255, 0.8); }
+  .touch-hitbox[data-lane="2"] { border-color: rgba(18, 250, 5, 0.8); }
+  .touch-hitbox[data-lane="3"] { border-color: rgba(249, 57, 63, 0.8); }
+  .touch-hitbox.pressed {
+    transform: scale(0.92);
+    background: rgba(255, 255, 255, 0.4);
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+  }
+
+  /* HUD Overlay */
+  #hud-overlay {
+    position: absolute;
+    bottom: 12px;
+    left: 0; width: 100%;
+    text-align: center;
+    font-family: monospace;
+    font-size: 15px;
+    text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000;
+    pointer-events: none;
+    z-index: 35;
+  }
+</style>
+</head>
+<body>
+
+<div id="drop-backdrop">DROP .IMP PROJECT OR AUDIO/JSON FILES HERE</div>
+
+<!-- Loader Screen -->
+<div id="loader-screen">
+  <h1>FNF Mod Player</h1>
+  <p class="sub">Load a single <b>.imp</b> project file OR drop <b>Inst.ogg</b> + <b>Voices.ogg</b> + <b>normal.json</b></p>
+
+  <div class="drop-card" onclick="document.getElementById('hidden-file-input').click()">
+    <p>📁 <b>Drop files here</b> or click to browse</p>
+    <small>Supports: .imp (all-in-one), .ogg, .mp3, .json</small>
+    <input type="file" id="hidden-file-input" multiple accept=".imp,.json,.ogg,.mp3,.wav" style="display:none">
+  </div>
+
+  <div class="file-status-box">
+    <div class="file-item" id="stat-project"><span>Project (.imp):</span><span id="txt-project">None</span></div>
+    <div class="file-item" id="stat-inst"><span>Inst (.ogg):</span><span id="txt-inst">Waiting...</span></div>
+    <div class="file-item" id="stat-voices"><span>Voices (.ogg):</span><span id="txt-voices">Waiting (Optional)...</span></div>
+    <div class="file-item" id="stat-chart"><span>Chart (.json):</span><span id="txt-chart">Waiting...</span></div>
+  </div>
+
+  <!-- Persistent Settings -->
+  <div class="settings-grid">
+    <label><input type="checkbox" id="opt-downscroll"> Downscroll</label>
+    <label><input type="checkbox" id="opt-botplay"> Botplay</label>
+    <label><input type="checkbox" id="opt-mobile"> Mobile Buttons</label>
+    <label><input type="checkbox" id="opt-flip-cam"> Flip Camera Target</label>
+  </div>
+
+  <div class="speed-slider-row">
+    <span>Scroll Speed:</span>
+    <input type="range" id="opt-scroll-speed" min="1.0" max="4.0" step="0.1" value="2.4" oninput="updateSpeedLabel(this.value)">
+    <b id="lbl-speed" style="color:#39ff14; min-width:40px;">2.4x</b>
+  </div>
+
+  <button id="btn-start" disabled>LOAD REQUIRED FILES</button>
+</div>
+
+<!-- Main Game Canvas -->
+<div id="game-container">
+  <canvas id="gameCanvas"></canvas>
+
+  <div id="mobile-touch-layer">
+    <div class="touch-hitbox-container">
+      <div class="touch-hitbox" data-lane="0">◄</div>
+      <div class="touch-hitbox" data-lane="1">▼</div>
+      <div class="touch-hitbox" data-lane="2">▲</div>
+      <div class="touch-hitbox" data-lane="3">►</div>
+    </div>
+  </div>
+
+  <div id="hud-overlay"></div>
+</div>
+
+<script>
+// =========================================================================
+// --- PERSISTENT SETTINGS (LOCALSTORAGE) ---
+// =========================================================================
+
+const SETTINGS_KEY = 'fnf_player_preferences';
+
+function loadSavedPreferences() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    if (saved.downscroll !== undefined) document.getElementById('opt-downscroll').checked = saved.downscroll;
+    if (saved.botplay !== undefined) document.getElementById('opt-botplay').checked = saved.botplay;
+    if (saved.mobile !== undefined) document.getElementById('opt-mobile').checked = saved.mobile;
+    if (saved.flipCam !== undefined) document.getElementById('opt-flip-cam').checked = saved.flipCam;
+    if (saved.scrollSpeed) {
+      document.getElementById('opt-scroll-speed').value = saved.scrollSpeed;
+      updateSpeedLabel(saved.scrollSpeed);
+    }
+  } catch(e){}
+}
+
+function saveCurrentPreferences() {
+  try {
+    const prefs = {
+      downscroll: document.getElementById('opt-downscroll').checked,
+      botplay: document.getElementById('opt-botplay').checked,
+      mobile: document.getElementById('opt-mobile').checked,
+      flipCam: document.getElementById('opt-flip-cam').checked,
+      scrollSpeed: parseFloat(document.getElementById('opt-scroll-speed').value) || 2.4
+    };
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(prefs));
+  } catch(e){}
+}
+
+function updateSpeedLabel(val) {
+  document.getElementById('lbl-speed').textContent = `${parseFloat(val).toFixed(1)}x`;
+  saveCurrentPreferences();
+}
+
+// Add listeners to save on toggle
+['opt-downscroll', 'opt-botplay', 'opt-mobile', 'opt-flip-cam'].forEach(id => {
+  document.getElementById(id).addEventListener('change', saveCurrentPreferences);
+});
+
+loadSavedPreferences();
+
+// =========================================================================
+// --- GAMEPLAY STATE & CANVAS ---
+// =========================================================================
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+window.addEventListener('load', resizeCanvas);
+
+const ARROW_COLORS = ['#C24B99', '#00FFFF', '#12FA05', '#F9393F'];
+const KEY_MAP = {
+  'KeyD': 0, 'ArrowLeft': 0,
+  'KeyF': 1, 'ArrowDown': 1,
+  'KeyJ': 2, 'ArrowUp': 2,
+  'KeyK': 3, 'ArrowRight': 3
+};
+
+let score = 0;
+let misses = 0;
+let combo = 0;
+let health = 1.0;
+let ratingText = '';
+let ratingTimer = 0;
+let ratingColor = '#00e676';
+
+const playerReceptors = [0, 0, 0, 0];
+const dadReceptors = [0, 0, 0, 0];
+const receptorGlowTimer = { bf: [0, 0, 0, 0], dad: [0, 0, 0, 0] };
+
+const cam = {
+  x: 0, y: 0,
+  targetX: 0, targetY: 0,
+  zoom: 0.85, targetZoom: 0.85, baseZoom: 0.85,
+  bopStrength: 0.04,
+  bopFreq: 4,
+  smartTracking: true,
+  shakeIntensity: 0, shakeDuration: 0,
+  flashColor: '#ffffff', flashAlpha: 0
+};
+
+let audioCtx = null;
+let instBuffer = null, voicesBuffer = null;
+let instSource = null, voicesSource = null;
+let rawInstFile = null, rawVoicesFile = null, rawChartFile = null;
+
+let chartData = null;
+let parsedNotes = [];
+let chartSections = [];
+let bpm = 118;
+let songSpeed = 2.4;
+let songDuration = 120000;
+let currentTime = 0;
+let startPosTime = 0;
+let isPlaying = false;
+let audioStartContextTime = 0;
+let audioSeekOffset = 0;
+
+let curBeat = 0;
+let lastBeat = -1;
+
+function createEmptyPoses() {
+  return { idle: [], singUP: [], singDOWN: [], singLEFT: [], singRIGHT: [] };
+}
+
+function createDefaultCharacters() {
+  return {
+    dad: { id: 'dad', name: 'Opponent (Lime)', x: -300, y: 20, width: 180, height: 280, flipX: false, color: '#39ff14', currentPose: 'idle', fps: 12, animTimer: 0, danceFreq: 2, bouncePow: 0.06, bounceScale: 1.0, holdTimer: 0, poses: createEmptyPoses() },
+    gf:  { id: 'gf',  name: 'Girlfriend',      x: 0,    y: -40, width: 200, height: 220, flipX: false, color: '#c026d3', currentPose: 'idle', fps: 12, animTimer: 0, danceFreq: 2, bouncePow: 0.06, bounceScale: 1.0, holdTimer: 0, poses: createEmptyPoses() },
+    bf:  { id: 'bf',  name: 'Boyfriend',       x: 300,  y: 30, width: 170, height: 260, flipX: false, color: '#00ffff', currentPose: 'idle', fps: 12, animTimer: 0, danceFreq: 2, bouncePow: 0.06, bounceScale: 1.0, holdTimer: 0, poses: createEmptyPoses() }
+  };
+}
+
+let phases = [
+  {
+    id: 'phase_1',
+    name: 'Phase 1',
+    characters: createDefaultCharacters(),
+    icons: { bf: { neutral: null, losing: null }, dad: { neutral: null, losing: null } },
+    props: [],
+    stageBg: null
+  }
+];
+
+let activePhaseIndex = 0;
+function getCurPhase() { return phases[activePhaseIndex] || phases[0]; }
+
+let timelineEvents = [];
+let activeTransition = null;
+
+// =========================================================================
+// --- FILE IMPORT ENGINE (.imp OR RAW AUDIO/JSON) ---
+// =========================================================================
+
+const dropBackdrop = document.getElementById('drop-backdrop');
+const hiddenFileInput = document.getElementById('hidden-file-input');
+const btnStart = document.getElementById('btn-start');
+const optDownscroll = document.getElementById('opt-downscroll');
+const optBotplay = document.getElementById('opt-botplay');
+const optMobile = document.getElementById('opt-mobile');
+const optFlipCam = document.getElementById('opt-flip-cam');
+
+['dragenter', 'dragover'].forEach(name => {
+  window.addEventListener(name, (e) => { e.preventDefault(); dropBackdrop.style.display = 'flex'; }, false);
+});
+['dragleave', 'drop'].forEach(name => {
+  window.addEventListener(name, (e) => {
+    e.preventDefault();
+    if (e.target === dropBackdrop || name === 'drop') dropBackdrop.style.display = 'none';
+  }, false);
+});
+
+window.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropBackdrop.style.display = 'none';
+  if (e.dataTransfer && e.dataTransfer.files) handleDroppedFiles(e.dataTransfer.files);
+});
+
+hiddenFileInput.addEventListener('change', (e) => {
+  if (e.target.files) handleDroppedFiles(e.target.files);
+});
+
+async function handleDroppedFiles(files) {
+  const fileList = Array.from(files);
+
+  const impFile = fileList.find(f => f.name.endsWith('.imp'));
+  if (impFile) {
+    await loadIMPFile(impFile);
+    return;
+  }
+
+  fileList.forEach(f => {
+    const name = f.name.toLowerCase();
+    if (name.endsWith('.json')) {
+      rawChartFile = f;
+      const r = new FileReader();
+      r.onload = (e) => {
+        try {
+          chartData = JSON.parse(e.target.result);
+          processChartData(chartData);
+          document.getElementById('stat-chart').classList.add('loaded');
+          document.getElementById('txt-chart').textContent = f.name;
+          checkStartReady();
+        } catch(err) { alert('Invalid chart JSON format!'); }
+      };
+      r.readAsText(f);
+    } else if (name.includes('voice') || name.includes('vocals')) {
+      rawVoicesFile = f;
+      document.getElementById('stat-voices').classList.add('loaded');
+      document.getElementById('txt-voices').textContent = f.name;
+    } else if (name.includes('inst') || name.endsWith('.ogg') || name.endsWith('.mp3') || name.endsWith('.wav')) {
+      rawInstFile = f;
+      document.getElementById('stat-inst').classList.add('loaded');
+      document.getElementById('txt-inst').textContent = f.name;
+      checkStartReady();
+    }
+  });
+}
+
+function checkStartReady() {
+  if ((rawInstFile && rawChartFile) || instBuffer) {
+    btnStart.disabled = false;
+    btnStart.textContent = 'START GAME';
+  }
+}
+
+async function loadIMPFile(file) {
+  btnStart.textContent = 'DECODING .IMP...';
+  const text = await file.text();
+
+  try {
+    const imp = JSON.parse(text);
+    if (!imp.format || !imp.format.startsWith('IMP_STUDIO')) {
+      alert('File is not a valid .imp mod project!');
+      return;
+    }
+
+    await initAudioContext();
+
+    if (imp.audio?.inst) {
+      const buf = base64ToArrayBuffer(imp.audio.inst);
+      instBuffer = await audioCtx.decodeAudioData(buf);
+      songDuration = instBuffer.duration * 1000;
+      document.getElementById('stat-inst').classList.add('loaded');
+      document.getElementById('txt-inst').textContent = 'Loaded from .imp';
+    }
+    if (imp.audio?.voices) {
+      const buf = base64ToArrayBuffer(imp.audio.voices);
+      voicesBuffer = await audioCtx.decodeAudioData(buf);
+      document.getElementById('stat-voices').classList.add('loaded');
+      document.getElementById('txt-voices').textContent = 'Loaded from .imp';
+    }
+
+    if (imp.chart) {
+      chartData = imp.chart;
+      processChartData(chartData);
+      document.getElementById('stat-chart').classList.add('loaded');
+      document.getElementById('txt-chart').textContent = `${chartData?.song?.song || 'Chart'} (.imp)`;
+    }
+
+    // Restore Settings & Scroll Speed from .imp
+    if (imp.config) {
+      if (imp.config.downscroll !== undefined) optDownscroll.checked = imp.config.downscroll;
+      if (imp.config.scrollSpeed) {
+        document.getElementById('opt-scroll-speed').value = imp.config.scrollSpeed;
+        updateSpeedLabel(imp.config.scrollSpeed);
+      }
+    }
+
+    if (imp.camera) {
+      cam.targetZoom = imp.camera.baseZoom || 0.85;
+      cam.baseZoom = cam.targetZoom;
+      cam.bopStrength = imp.camera.bopStrength || 0.04;
+      cam.bopFreq = imp.camera.bopFreq || 4;
+      cam.smartTracking = imp.camera.smartTracking !== false;
+    }
+
+    startPosTime = imp.startPos || 0;
+    timelineEvents = imp.events || [];
+
+    const reconstructedPhases = [];
+    for (const p of imp.phases) {
+      const newChars = createDefaultCharacters();
+
+      for (const cid of ['dad', 'bf', 'gf']) {
+        const charData = p.characters[cid];
+        if (!charData) continue;
+        newChars[cid].x = charData.x;
+        newChars[cid].y = charData.y;
+        newChars[cid].width = charData.width;
+        newChars[cid].height = charData.height;
+        newChars[cid].flipX = charData.flipX;
+        newChars[cid].fps = charData.fps || 12;
+        newChars[cid].danceFreq = charData.danceFreq || 2;
+        newChars[cid].bouncePow = charData.bouncePow || 0.06;
+
+        for (const [poseKey, frames] of Object.entries(charData.poses || {})) {
+          newChars[cid].poses[poseKey] = [];
+          for (const f of frames) {
+            const img = await loadImageFromB64(f.imgB64);
+            if (img) newChars[cid].poses[poseKey].push({ img: img, w: f.w, h: f.h, ox: f.ox, oy: f.oy });
+          }
+        }
+      }
+
+      const dadNeutral = await loadImageFromB64(p.icons?.dad?.neutral);
+      const dadLosing = await loadImageFromB64(p.icons?.dad?.losing);
+      const bfNeutral = await loadImageFromB64(p.icons?.bf?.neutral);
+      const bfLosing = await loadImageFromB64(p.icons?.bf?.losing);
+
+      let restoredBg = null;
+      if (p.stageBg?.imgB64) {
+        const bgImg = await loadImageFromB64(p.stageBg.imgB64);
+        restoredBg = { ...p.stageBg, img: bgImg };
+      }
+
+      const restoredProps = [];
+      for (const pr of p.props || []) {
+        if (pr.imgB64) {
+          const propImg = await loadImageFromB64(pr.imgB64);
+          restoredProps.push({ ...pr, img: propImg });
+        }
+      }
+
+      reconstructedPhases.push({
+        id: p.id,
+        name: p.name,
+        characters: newChars,
+        icons: { dad: { neutral: dadNeutral, losing: dadLosing }, bf: { neutral: bfNeutral, losing: bfLosing } },
+        stageBg: restoredBg,
+        props: restoredProps
+      });
+    }
+
+    phases = reconstructedPhases;
+    activePhaseIndex = 0;
+
+    document.getElementById('stat-project').classList.add('loaded');
+    document.getElementById('txt-project').textContent = file.name;
+
+    btnStart.disabled = false;
+    btnStart.textContent = 'START GAME';
+  } catch(err) {
+    console.error(err);
+    alert('Failed to read .imp file!');
+    btnStart.textContent = 'LOAD REQUIRED FILES';
+  }
+}
+
+function base64ToArrayBuffer(base64) {
+  const raw = window.atob(base64.split(',')[1] || base64);
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return bytes.buffer;
+}
+
+function loadImageFromB64(b64) {
+  return new Promise((resolve) => {
+    if (!b64) return resolve(null);
+    const img = new Image();
+    img.src = b64;
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+  });
+}
+
+// Chart Parser: True BPM Follower (Fixes Camera Timing Flips!)
+function processChartData(data) {
+  const song = data.song || data;
+  bpm = song.bpm || 118; // Master song BPM
+  songSpeed = song.speed || 2.4;
+
+  parsedNotes = [];
+  chartSections = [];
+  const isNMV = song.format === 'nmv2' || song.lanes !== undefined || Boolean(song.format);
+
+  let currentSecTime = 0;
+  let activeBpm = bpm;
+
+  (song.notes || []).forEach(sec => {
+    // Only switch BPM if changeBPM is strictly true!
+    if (sec.changeBPM && sec.bpm) {
+      activeBpm = sec.bpm;
+    }
+
+    const mustHit = !!sec.mustHitSection;
+    const secBeats = sec.sectionBeats || 4;
+    const secDuration = (secBeats * (60 / activeBpm)) * 1000;
+
+    chartSections.push({
+      startTime: currentSecTime,
+      endTime: currentSecTime + secDuration,
+      mustHitSection: mustHit
+    });
+    currentSecTime += secDuration;
+
+    (sec.sectionNotes || []).forEach(n => {
+      const strumTime = n[0];
+      const rawDir = n[1];
+      const sustain = n[2] || 0;
+      const isPlayer = isNMV ? (rawDir < 4) : (mustHit ? rawDir < 4 : rawDir >= 4);
+
+      parsedNotes.push({
+        time: strumTime,
+        dir: rawDir % 4,
+        sustain: sustain,
+        isPlayer: isPlayer,
+        hit: false,
+        missed: false
+      });
+    });
+  });
+
+  parsedNotes.sort((a, b) => a.time - b.time);
+}
+
+// =========================================================================
+// --- START PLAYBACK ENGINE ---
+// =========================================================================
+
+async function initAudioContext() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') await audioCtx.resume();
+}
+
+btnStart.addEventListener('click', async () => {
+  btnStart.textContent = 'PREPARING AUDIO...';
+  btnStart.disabled = true;
+
+  saveCurrentPreferences();
+
+  // Apply user scroll speed preference
+  const prefSpeed = parseFloat(document.getElementById('opt-scroll-speed').value);
+  if (prefSpeed) songSpeed = prefSpeed;
+
+  await initAudioContext();
+
+  if (rawInstFile && !instBuffer) {
+    const buf = await rawInstFile.arrayBuffer();
+    instBuffer = await audioCtx.decodeAudioData(buf);
+    songDuration = instBuffer.duration * 1000;
+  }
+  if (rawVoicesFile && !voicesBuffer) {
+    const buf = await rawVoicesFile.arrayBuffer();
+    voicesBuffer = await audioCtx.decodeAudioData(buf);
+  }
+
+  document.getElementById('loader-screen').style.display = 'none';
+
+  if (optMobile.checked) {
+    document.getElementById('mobile-touch-layer').style.display = 'block';
+  }
+
+  instSource = audioCtx.createBufferSource();
+  instSource.buffer = instBuffer;
+  instSource.connect(audioCtx.destination);
+
+  if (voicesBuffer) {
+    voicesSource = audioCtx.createBufferSource();
+    voicesSource.buffer = voicesBuffer;
+    voicesSource.connect(audioCtx.destination);
+  }
+
+  const offset = 0.5;
+  audioStartContextTime = audioCtx.currentTime + offset;
+  audioSeekOffset = (startPosTime || 0) / 1000;
+  currentTime = startPosTime || 0;
+
+  instSource.start(audioStartContextTime, audioSeekOffset);
+  if (voicesSource) voicesSource.start(audioStartContextTime, audioSeekOffset);
+
+  isPlaying = true;
+  requestAnimationFrame(gameLoop);
+});
+
+// =========================================================================
+// --- CONTROLS: KEYBOARD & V-SLICE MOBILE SLIDING TOUCH ---
+// =========================================================================
+
+window.addEventListener('keydown', (e) => {
+  if (e.repeat || optBotplay.checked || !isPlaying) return;
+  const lane = KEY_MAP[e.code];
+  if (lane !== undefined) {
+    playerReceptors[lane] = 1;
+    judgePlayerHit(lane);
+  }
+});
+
+window.addEventListener('keyup', (e) => {
+  if (optBotplay.checked) return;
+  const lane = KEY_MAP[e.code];
+  if (lane !== undefined) playerReceptors[lane] = 0;
+});
+
+const mobileTouchLayer = document.getElementById('mobile-touch-layer');
+const hitboxes = document.querySelectorAll('.touch-hitbox');
+
+function updateMobileTouches(e) {
+  e.preventDefault();
+  if (optBotplay.checked || !isPlaying) return;
+
+  const activeLanes = [false, false, false, false];
+
+  for (let i = 0; i < e.touches.length; i++) {
+    const touch = e.touches[i];
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (el && el.dataset.lane !== undefined) {
+      activeLanes[parseInt(el.dataset.lane)] = true;
+    }
+  }
+
+  hitboxes.forEach((box) => {
+    const lane = parseInt(box.dataset.lane);
+    const isDown = activeLanes[lane];
+
+    if (isDown) {
+      if (!box.classList.contains('pressed')) {
+        box.classList.add('pressed');
+        playerReceptors[lane] = 1;
+        judgePlayerHit(lane);
+      }
+    } else {
+      if (box.classList.contains('pressed')) {
+        box.classList.remove('pressed');
+        playerReceptors[lane] = 0;
+      }
+    }
+  });
+}
+
+function handleTouchEnd(e) {
+  e.preventDefault();
+  updateMobileTouches(e);
+}
+
+['touchstart', 'touchmove'].forEach(evt => {
+  mobileTouchLayer.addEventListener(evt, updateMobileTouches, { passive: false });
+});
+['touchend', 'touchcancel'].forEach(evt => {
+  mobileTouchLayer.addEventListener(evt, handleTouchEnd, { passive: false });
+});
+
+function judgePlayerHit(lane) {
+  const hitNote = parsedNotes.find(n => n.isPlayer && !n.hit && !n.missed && n.dir === lane && Math.abs(n.time - currentTime) <= 166);
+
+  if (hitNote) {
+    hitNote.hit = true;
+    playerReceptors[lane] = 2;
+    receptorGlowTimer.bf[lane] = currentTime + Math.max(140, hitNote.sustain);
+
+    const dirPoses = ['singLEFT', 'singDOWN', 'singUP', 'singRIGHT'];
+    const bf = getCurPhase().characters.bf;
+    bf.currentPose = dirPoses[lane];
+    bf.animTimer = 0;
+    bf.holdTimer = Math.max(0.35, (hitNote.sustain / 1000) + 0.08);
+
+    combo++;
+    const diff = Math.abs(hitNote.time - currentTime);
+
+    if (diff <= 45) {
+      ratingText = 'SICK!'; ratingColor = '#00e676'; score += 350; health = Math.min(2.0, health + 0.04);
+    } else if (diff <= 90) {
+      ratingText = 'GOOD'; ratingColor = '#38bdf8'; score += 200; health = Math.min(2.0, health + 0.025);
+    } else if (diff <= 135) {
+      ratingText = 'BAD'; ratingColor = '#ffea00'; score += 100; health = Math.min(2.0, health + 0.01);
+    } else {
+      ratingText = 'SHIT'; ratingColor = '#ff5722'; score += 50;
+    }
+    ratingTimer = currentTime + 400;
+  }
+}
+
+function triggerMiss(lane) {
+  misses++;
+  combo = 0;
+  score = Math.max(0, score - 10);
+  health = Math.max(0.0, health - 0.08);
+  ratingText = 'MISS';
+  ratingColor = '#ff1744';
+  ratingTimer = currentTime + 400;
+
+  playerReceptors[lane] = 1;
+  setTimeout(() => { playerReceptors[lane] = 0; }, 100);
+}
+
+function triggerFlash(col, a) { cam.flashColor = col; cam.flashAlpha = a; }
+function triggerShake(amt, d) { cam.shakeIntensity = amt; cam.shakeDuration = d; }
+
+function triggerBlackoutTransition(trans) {
+  activeTransition = {
+    ...trans,
+    elapsed: 0,
+    total: trans.fadeOut + trans.hold + trans.fadeIn,
+    swapped: false
+  };
+}
+
+// =========================================================================
+// --- GAME LOOP & SMART CAMERA ---
+// =========================================================================
+
+let lastTime = performance.now();
+
+function gameLoop() {
+  if (!isPlaying) return;
+
+  const now = performance.now();
+  const dt = Math.min(0.1, (now - lastTime) / 1000);
+  lastTime = now;
+
+  const downscroll = optDownscroll.checked;
+  const botplay = optBotplay.checked;
+  const isMobile = optMobile.checked;
+  const flipCam = optFlipCam.checked;
+
+  if (audioCtx && instSource) {
+    currentTime = (audioCtx.currentTime - audioStartContextTime + audioSeekOffset) * 1000;
+  } else {
+    currentTime += dt * 1000;
+  }
+
+  if (currentTime >= songDuration) {
+    isPlaying = false;
+    alert(`Song Complete! Final Score: ${score} | Misses: ${misses}`);
+    return;
+  }
+
+  // Exact Beat Bop Calculation
+  const beatDuration = (60 / bpm) * 1000;
+  curBeat = Math.floor(currentTime / beatDuration);
+
+  if (curBeat !== lastBeat && curBeat >= 0) {
+    lastBeat = curBeat;
+    if (curBeat % cam.bopFreq === 0) cam.zoom += cam.bopStrength;
+
+    const cp = getCurPhase();
+    ['dad', 'bf', 'gf'].forEach(cid => {
+      const ch = cp.characters[cid];
+      if (curBeat % ch.danceFreq === 0) {
+        ch.bounceScale = 1.0 + ch.bouncePow;
+        if (ch.holdTimer <= 0) { ch.currentPose = 'idle'; ch.animTimer = 0; }
+      }
+    });
+  }
+
+  for (let i = 0; i < 4; i++) {
+    if (receptorGlowTimer.bf[i] > 0 && currentTime > receptorGlowTimer.bf[i]) playerReceptors[i] = 0;
+    if (receptorGlowTimer.dad[i] > 0 && currentTime > receptorGlowTimer.dad[i]) dadReceptors[i] = 0;
+  }
+
+  timelineEvents.forEach(ev => {
+    if (!ev.triggered && Math.abs(currentTime - ev.time) <= 120) {
+      ev.triggered = true;
+      triggerBlackoutTransition(ev);
+    }
+  });
+
+  const cp = getCurPhase();
+
+  // Process Notes, Opponent Sing & Botplay Hits
+  parsedNotes.forEach(n => {
+    if (n.hit || n.missed) return;
+
+    if (!n.isPlayer && currentTime >= n.time) {
+      n.hit = true;
+      dadReceptors[n.dir] = 2;
+      receptorGlowTimer.dad[n.dir] = currentTime + Math.max(140, n.sustain);
+
+      const dirPoses = ['singLEFT', 'singDOWN', 'singUP', 'singRIGHT'];
+      cp.characters.dad.currentPose = dirPoses[n.dir];
+      cp.characters.dad.animTimer = 0;
+      cp.characters.dad.holdTimer = Math.max(0.35, (n.sustain / 1000) + 0.08);
+    }
+
+    if (botplay && n.isPlayer && currentTime >= n.time) {
+      n.hit = true;
+      playerReceptors[n.dir] = 2;
+      receptorGlowTimer.bf[n.dir] = currentTime + Math.max(140, n.sustain);
+
+      const dirPoses = ['singLEFT', 'singDOWN', 'singUP', 'singRIGHT'];
+      cp.characters.bf.currentPose = dirPoses[n.dir];
+      cp.characters.bf.animTimer = 0;
+      cp.characters.bf.holdTimer = Math.max(0.35, (n.sustain / 1000) + 0.08);
+
+      combo++; score += 350; health = Math.min(2.0, health + 0.04);
+      ratingText = 'SICK!'; ratingColor = '#00e676'; ratingTimer = currentTime + 400;
+    }
+
+    if (!botplay && n.isPlayer && currentTime - n.time > 166) {
+      n.missed = true;
+      triggerMiss(n.dir);
+    }
+  });
+
+  // Section-Based Camera Tracking (Resolved Inversion!)
+  if (cam.smartTracking) {
+    const activeSec = chartSections.find(s => currentTime >= s.startTime && currentTime < s.endTime);
+    const dadSinging = parsedNotes.some(n => !n.isPlayer && Math.abs(n.time - currentTime) <= 200);
+    const bfSinging = parsedNotes.some(n => n.isPlayer && Math.abs(n.time - currentTime) <= 200);
+
+    if (dadSinging && bfSinging) {
+      cam.targetX = (cp.characters.dad.x + cp.characters.bf.x) / 2;
+      cam.targetY = ((cp.characters.dad.y + cp.characters.bf.y) / 2) - 20;
+      cam.targetZoom = cam.baseZoom * 0.82;
+    } else if (activeSec) {
+      // Normal FNF: mustHitSection = BF, else Dad. (Inverted if flipCam toggle is on)
+      const focusBF = flipCam ? !activeSec.mustHitSection : activeSec.mustHitSection;
+
+      if (focusBF) {
+        cam.targetX = cp.characters.bf.x; cam.targetY = cp.characters.bf.y - 20;
+      } else {
+        cam.targetX = cp.characters.dad.x; cam.targetY = cp.characters.dad.y - 20;
+      }
+      cam.targetZoom = cam.baseZoom;
+    } else if (dadSinging) {
+      cam.targetX = cp.characters.dad.x; cam.targetY = cp.characters.dad.y - 20;
+    } else if (bfSinging) {
+      cam.targetX = cp.characters.bf.x; cam.targetY = cp.characters.bf.y - 20;
+    }
+  }
+
+  // Smooth Exponential Lerp
+  const lerpRate = 1 - Math.exp(-4.5 * dt);
+  cam.x += (cam.targetX - cam.x) * lerpRate;
+  cam.y += (cam.targetY - cam.y) * lerpRate;
+  cam.zoom += (cam.targetZoom - cam.zoom) * (1 - Math.exp(-7.0 * dt));
+
+  let shakeX = 0, shakeY = 0;
+  if (cam.shakeDuration > 0) {
+    cam.shakeDuration -= dt;
+    shakeX = (Math.random() - 0.5) * cam.shakeIntensity * 2;
+    shakeY = (Math.random() - 0.5) * cam.shakeIntensity * 2;
+  }
+
+  ctx.fillStyle = '#06070a';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // 1. World Layer
+  ctx.save();
+  ctx.translate(canvas.width / 2 + shakeX, canvas.height / 2 + shakeY);
+  ctx.scale(cam.zoom, cam.zoom);
+  ctx.translate(-cam.x, -cam.y);
+
+  if (cp.stageBg && cp.stageBg.img) {
+    ctx.drawImage(cp.stageBg.img, cp.stageBg.x - cp.stageBg.width / 2, cp.stageBg.y - cp.stageBg.height / 2, cp.stageBg.width, cp.stageBg.height);
+  }
+
+  cp.props.forEach(p => {
+    if (p.img) ctx.drawImage(p.img, p.x - p.width / 2, p.y - p.height / 2, p.width, p.height);
+  });
+
+  // Characters
+  ['gf', 'dad', 'bf'].forEach(id => {
+    const c = cp.characters[id];
+    c.animTimer = (c.animTimer || 0) + dt;
+
+    if (c.holdTimer > 0) {
+      c.holdTimer -= dt;
+      if (c.holdTimer <= 0) { c.currentPose = 'idle'; c.animTimer = 0; }
+    }
+    c.bounceScale += (1.0 - c.bounceScale) * (1 - Math.exp(-12 * dt));
+
+    const frames = c.poses[c.currentPose] && c.poses[c.currentPose].length > 0 
+      ? c.poses[c.currentPose] : c.poses['idle'];
+
+    ctx.save();
+    ctx.translate(c.x, c.y);
+    if (c.flipX) ctx.scale(-1, 1);
+    ctx.scale(c.bounceScale, 2.0 - c.bounceScale);
+
+    if (frames && frames.length > 0) {
+      const frameIndex = Math.floor(c.animTimer * c.fps) % frames.length;
+      const curFrame = frames[frameIndex];
+      const fw = curFrame.w || c.width, fh = curFrame.h || c.height;
+      if (curFrame.img) ctx.drawImage(curFrame.img, -fw / 2 + (curFrame.ox || 0), -fh / 2 + (curFrame.oy || 0), fw, fh);
+    } else {
+      ctx.fillStyle = c.color + '44';
+      ctx.strokeStyle = c.color;
+      ctx.lineWidth = 2;
+      ctx.fillRect(-c.width / 2, -c.height / 2, c.width, c.height);
+      ctx.strokeRect(-c.width / 2, -c.height / 2, c.width, c.height);
+    }
+    ctx.restore();
+  });
+
+  ctx.restore();
+
+  // 2. Smart Blackout (World Only)
+  let blackAlpha = 0;
+  if (activeTransition) {
+    activeTransition.elapsed += dt;
+    const t = activeTransition.elapsed;
+
+    if (t < activeTransition.fadeOut) {
+      blackAlpha = t / activeTransition.fadeOut;
+    } else if (t < activeTransition.fadeOut + activeTransition.hold) {
+      blackAlpha = 1.0;
+      if (!activeTransition.swapped) {
+        activePhaseIndex = activeTransition.targetPhaseIndex || 0;
+        activeTransition.swapped = true;
+        if (activeTransition.peakFlash && activeTransition.peakFlash !== 'none') triggerFlash(activeTransition.peakFlash, 0.9);
+        if (activeTransition.peakShake && activeTransition.peakShake > 0) triggerShake(activeTransition.peakShake, 0.4);
+      }
+    } else if (t < activeTransition.total) {
+      blackAlpha = (activeTransition.total - t) / activeTransition.fadeIn;
+    } else {
+      activeTransition = null;
+    }
+
+    if (activeTransition && activeTransition.uiMode === 'keep_ui') {
+      ctx.fillStyle = '#000000';
+      ctx.globalAlpha = Math.min(1, Math.max(0, blackAlpha));
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.globalAlpha = 1.0;
+    }
+  }
+
+  // 3. Gameplay UI Layer (Strums, Holds & Health Bar)
+  drawGameplayStrumsAndNotes(ctx, downscroll, isMobile);
+  drawHealthBarWithIcons(ctx, cp, downscroll);
+
+  // Rating Popup
+  if (ratingTimer > currentTime) {
+    ctx.save();
+    ctx.font = 'bold 38px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = ratingColor;
+    ctx.shadowColor = ratingColor;
+    ctx.shadowBlur = 14;
+    ctx.fillText(ratingText, canvas.width / 2, canvas.height / 2 - 40);
+
+    if (combo > 5) {
+      ctx.font = 'bold 24px monospace';
+      ctx.fillStyle = '#fff';
+      ctx.fillText(combo, canvas.width / 2, canvas.height / 2);
+    }
+    ctx.restore();
+  }
+
+  // 4. Full Screen Cinematic Blackout
+  if (activeTransition && activeTransition.uiMode === 'hide_all') {
+    ctx.fillStyle = '#000000';
+    ctx.globalAlpha = Math.min(1, Math.max(0, blackAlpha));
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.globalAlpha = 1.0;
+  }
+
+  // 5. Flash FX
+  if (cam.flashAlpha > 0) {
+    ctx.fillStyle = cam.flashColor;
+    ctx.globalAlpha = cam.flashAlpha;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.globalAlpha = 1.0;
+    cam.flashAlpha = Math.max(0, cam.flashAlpha - dt * 1.5);
+  }
+
+  // HUD Text
+  const accuracy = (score / Math.max(1, (score + misses * 350)) * 100).toFixed(1);
+  document.getElementById('hud-overlay').innerHTML = `
+    Score: <b>${score}</b> | Misses: <b>${misses}</b> | Accuracy: <b>${accuracy}%</b> | Speed: <b>${songSpeed.toFixed(1)}x</b>
+    ${botplay ? '<span style="color:#00e676">[BOTPLAY]</span>' : ''}
+  `;
+
+  requestAnimationFrame(gameLoop);
+}
+
+// =========================================================================
+// --- DRAWING: ARROWS, HOLDS & HEALTH BAR ---
+// =========================================================================
+
+function drawGameplayStrumsAndNotes(ctx, downscroll, isMobile) {
+  const spacing = 48;
+  const size = 19;
+  const scrollFactor = 0.45 * songSpeed;
+
+  const dadY = downscroll ? (canvas.height - 75) : 60;
+  for (let i = 0; i < 4; i++) {
+    const style = dadReceptors[i] === 2 ? 'glow' : 'stroke';
+    drawMiniArrow(ctx, 40 + i * spacing, dadY, size, i, ARROW_COLORS[i], style);
+  }
+
+  let bfY, bfStartX;
+  if (isMobile) {
+    const hitboxCont = document.querySelector('.touch-hitbox-container');
+    const rect = hitboxCont.getBoundingClientRect();
+    bfY = rect.top - 25;
+    bfStartX = rect.left + 20;
+  } else {
+    bfY = downscroll ? (canvas.height - 75) : 60;
+    bfStartX = Math.max(260, canvas.width - (4 * spacing) - 40);
+  }
+
+  for (let i = 0; i < 4; i++) {
+    const rx = bfStartX + i * (isMobile ? (spacing * 1.5) : spacing);
+    const style = playerReceptors[i] === 2 ? 'glow' : (playerReceptors[i] === 1 ? 'fill' : 'stroke');
+    drawMiniArrow(ctx, rx, bfY, size, i, ARROW_COLORS[i], style);
+  }
+
+  if (parsedNotes.length > 0) {
+    // 1. Draw Hold (Sustain) Trails
+    parsedNotes.forEach(n => {
+      if (n.sustain <= 0 || n.missed) return;
+      const noteEndTime = n.time + n.sustain;
+      if (currentTime > noteEndTime || n.time - currentTime > 1200) return;
+
+      const noteX = n.isPlayer 
+        ? (bfStartX + n.dir * (isMobile ? (spacing * 1.5) : spacing))
+        : (40 + n.dir * spacing);
+      const targetStrumY = n.isPlayer ? bfY : dadY;
+
+      let startY = downscroll ? (targetStrumY - (n.time - currentTime) * scrollFactor) : (targetStrumY + (n.time - currentTime) * scrollFactor);
+      let endY = downscroll ? (targetStrumY - (noteEndTime - currentTime) * scrollFactor) : (targetStrumY + (noteEndTime - currentTime) * scrollFactor);
+
+      if (currentTime >= n.time) startY = targetStrumY;
+
+      drawSustainTrail(ctx, noteX, startY, endY, n.dir);
+    });
+
+    // 2. Draw Note Heads
+    parsedNotes.forEach(n => {
+      if (n.hit || n.missed) return;
+      const timeDiff = n.time - currentTime;
+      if (timeDiff < -180 || timeDiff > 1200) return;
+
+      const noteX = n.isPlayer 
+        ? (bfStartX + n.dir * (isMobile ? (spacing * 1.5) : spacing))
+        : (40 + n.dir * spacing);
+      const targetStrumY = n.isPlayer ? bfY : dadY;
+      const noteY = downscroll ? (targetStrumY - timeDiff * scrollFactor) : (targetStrumY + timeDiff * scrollFactor);
+
+      if (noteY >= -50 && noteY <= canvas.height + 50) {
+        drawMiniArrow(ctx, noteX, noteY, size, n.dir, ARROW_COLORS[n.dir], 'fill');
+      }
+    });
+  }
+}
+
+function drawSustainTrail(ctx, noteX, startY, endY, dir) {
+  const trailWidth = 14;
+  const topY = Math.min(startY, endY);
+  const height = Math.abs(endY - startY);
+
+  if (height <= 1) return;
+
+  ctx.save();
+  ctx.fillStyle = ARROW_COLORS[dir] + '88';
+  ctx.strokeStyle = ARROW_COLORS[dir];
+  ctx.lineWidth = 2;
+  ctx.fillRect(noteX - trailWidth / 2, topY, trailWidth, height);
+  ctx.strokeRect(noteX - trailWidth / 2, topY, trailWidth, height);
+
+  ctx.beginPath();
+  ctx.arc(noteX, endY, trailWidth / 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawMiniArrow(ctx, x, y, size, dir, color, style = 'stroke') {
+  ctx.save();
+  ctx.translate(x, y);
+  const angles = [-Math.PI / 2, Math.PI, 0, Math.PI / 2];
+  ctx.rotate(angles[dir]);
+
+  ctx.beginPath();
+  ctx.moveTo(0, -size);
+  ctx.lineTo(size * 0.9, 0);
+  ctx.lineTo(size * 0.45, 0);
+  ctx.lineTo(size * 0.45, size * 0.9);
+  ctx.lineTo(-size * 0.45, size * 0.9);
+  ctx.lineTo(-size * 0.45, 0);
+  ctx.lineTo(-size * 0.9, 0);
+  ctx.closePath();
+
+  if (style === 'fill') {
+    ctx.fillStyle = color; ctx.fill();
+  } else if (style === 'glow') {
+    ctx.fillStyle = '#ffffff'; ctx.shadowColor = color; ctx.shadowBlur = 18; ctx.fill();
+  } else {
+    ctx.strokeStyle = '#475569'; ctx.lineWidth = 3; ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawHealthBarWithIcons(ctx, phase, downscroll) {
+  const barW = Math.min(420, canvas.width - 80), barH = 12;
+  const barX = (canvas.width - barW) / 2;
+  const barY = downscroll ? 35 : (canvas.height - 35);
+
+  const healthPct = Math.max(0, Math.min(1, health / 2.0));
+  const splitX = barX + barW * (1.0 - healthPct);
+
+  ctx.fillStyle = '#ff1744';
+  ctx.fillRect(barX, barY, barW, barH);
+  ctx.fillStyle = '#39ff14';
+  ctx.fillRect(splitX, barY, barX + barW - splitX, barH);
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(barX, barY, barW, barH);
+
+  const beatProgress = (currentTime % ((60 / bpm) * 1000)) / ((60 / bpm) * 1000);
+  const iconBounce = 1.0 + Math.max(0, 0.16 * (1.0 - beatProgress * 2.5));
+  const iconSize = 42 * iconBounce;
+
+  const dadIcon = (health >= 1.6 && phase.icons?.dad?.losing) ? phase.icons.dad.losing : phase.icons?.dad?.neutral;
+  if (dadIcon) {
+    ctx.drawImage(dadIcon, splitX - iconSize - 8, barY - iconSize / 2, iconSize, iconSize);
+  }
+
+  const bfIcon = (health <= 0.4 && phase.icons?.bf?.losing) ? phase.icons.bf.losing : phase.icons?.bf?.neutral;
+  if (bfIcon) {
+    ctx.drawImage(bfIcon, splitX + 8, barY - iconSize / 2, iconSize, iconSize);
+  }
+}
+
+resizeCanvas();
+</script>
+</body>
+</html>
